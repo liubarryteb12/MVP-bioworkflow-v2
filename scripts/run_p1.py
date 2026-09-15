@@ -265,6 +265,41 @@ def export_five_formats(workspace: str, figures: list) -> list:
     return out
 
 
+def find_matrix_file(workspace: str, dataset: str) -> str | None:
+    """在 inputs/raw/{ACC} 下找计数/表达矩阵文件。
+
+    绝不凭记忆猜文件名：一律现场扫描，按文件名关键词 + 大小排序。
+    """
+    root = os.path.join(workspace, "inputs", "raw", dataset)
+    if not os.path.isdir(root):
+        return None
+    cands = []
+    for r, _, files in os.walk(root):
+        for fn in files:
+            low = fn.lower()
+            if not low.endswith((".txt", ".csv", ".tsv")):
+                continue
+            if "meta" in low or "readme" in low:
+                continue
+            p = os.path.join(r, fn)
+            score = 0
+            if any(k in low for k in ("count", "read", "htseq", "featurecount")):
+                score += 20
+            elif any(k in low for k in ("fpkm", "tpm", "expr", "matrix", "normalized")):
+                score += 10
+            try:
+                size = os.path.getsize(p)
+            except OSError:
+                size = 0
+            cands.append((score, size, p))
+    if not cands:
+        return None
+    cands.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    rel = os.path.relpath(cands[0][2], workspace)
+    print(f"[{dataset}] 选中矩阵文件：{rel}")
+    return rel.replace("\\", "/")
+
+
 def write_sample_sheet(workspace: str, dataset: str, groups: dict) -> str:
     rel = os.path.join("inputs", "metadata", f"{dataset}_sample_sheet.csv")
     abs_p = os.path.join(workspace, rel)
@@ -352,8 +387,93 @@ def main() -> int:
     evidence = []
     methods = []
 
-    if data_type != "microarray":
-        reason = f"数据类型为 {data_type}，本轮 P1 只做数据可用性判定，不套用微阵列流程"
+    if data_type == "rna_seq":
+        # RNA-seq：计数矩阵 QC（总是做）+ DESeq2（仅 T21 通过才做）
+        matrix_rel = find_matrix_file(ws, acc)
+        if not matrix_rel or not sample_sheet_rel:
+            err = "未找到计数矩阵或样本表，无法继续"
+            print(f"[{acc}] {err}")
+            run_state["steps"].append({"module_id": "rnaseq_de", "status": "failed", "reason": err})
+            run_state["status"] = "failed"
+            dump_yaml(os.path.join(ws, "analysis", "_runs", run_id, "run.yaml"), run_state)
+            return 1
+
+        run_de = (t21["status"] == "pass")
+        seq += 1
+        mod = "rnaseq_de"
+        mdir = os.path.join(out_root, mod)
+        relx = lambda p: os.path.relpath(os.path.join(mdir, p), ws).replace("\\", "/")
+        outputs_r = [
+            {"name": "qc_summary", "path": relx("results/qc_summary.csv"), "format": "csv", "is_final": True,
+             "partn_n_output": partn_n(seq)},
+            {"name": "qc_libsize", "path": relx("figures/qc_libsize.pdf"), "format": "pdf", "is_final": True},
+            {"name": "qc_correlation", "path": relx("figures/qc_correlation.pdf"), "format": "pdf", "is_final": True},
+            {"name": "qc_pca", "path": relx("figures/qc_pca.pdf"), "format": "pdf", "is_final": True},
+            {"name": "deg_table", "path": relx("results/deg_table.csv"), "format": "csv", "is_final": True},
+            {"name": "volcano", "path": relx("figures/volcano.pdf"), "format": "pdf", "is_final": True,
+             "conditional": True},
+            {"name": "de_summary", "path": relx("results/de_summary.csv"), "format": "csv", "is_final": True},
+        ]
+        inputs_r = [
+            {"name": "count_matrix", "path": matrix_rel, "format": "csv", "required": True},
+            {"name": "sample_sheet", "path": sample_sheet_rel.replace("\\", "/"), "format": "csv", "required": True},
+        ]
+        ijson = build_input_json(
+            os.path.join(mdir, "run", f"input_{run_id}.json"), run_id, mod, inputs_r, outputs_r,
+            {"run_deseq2": run_de, "padj_threshold": 0.05, "log2fc_threshold": 1.0, "random_seed": 42},
+            relx(f"logs/{run_id}.log"))
+        rc_r = run_module(ws, mod, "analysis/modules/rnaseq_de/scripts/r/01_main.R",
+                          os.path.relpath(ijson, ws).replace("\\", "/"))
+        must = [o for o in outputs_r if o["name"] in ("qc_summary", "qc_libsize", "qc_correlation", "qc_pca",
+                                                      "deg_table", "de_summary")]
+        ok_r = rc_r == 0 and all(os.path.exists(os.path.join(ws, o["path"])) for o in must)
+        dump_yaml(os.path.join(mdir, "manifest.yaml"), {
+            "module_id": mod, "module_version": "1.0.0", "run_id": run_id, "timestamp": ts,
+            "status": "success" if ok_r else "failed", "execution_backend": "github_actions",
+            "inputs": inputs_r, "outputs": outputs_r,
+            "parameters": {"run_deseq2": run_de, "padj_threshold": 0.05, "log2fc_threshold": 1.0},
+            "environment": {"os": "Linux", "r_version": "4.3.1", "random_seed": 42},
+            "qc_result": {"passed": ok_r, "checks": [t21]},
+        })
+        write_handoff(os.path.join(mdir, "records", "handoff.md"),
+                      module_id=mod, dataset=acc, run_id=run_id, timestamp=ts,
+                      status="success" if ok_r else "failed",
+                      what="RNA-seq 计数矩阵质控" + ("+ DESeq2 差异表达" if run_de else "（T21 未通过，只做描述性 QC）"),
+                      did="读取计数矩阵 → library size/检出基因/样本相关/PCA" + ("→ DESeq2 差异表达" if run_de else ""),
+                      inputs_desc=f"- {matrix_rel}\n- {sample_sheet_rel}",
+                      outputs_desc="\n".join(f"- {o['name']}: {o['path']}" for o in outputs_r),
+                      result="见 qc_summary.csv / de_summary.csv" if ok_r else "执行失败",
+                      usable="可用（描述性）" if ok_r and not run_de else ("可用" if ok_r else "不可用"),
+                      next="进入富集分析" if run_de else "T21 未通过：需补样本至每组 n≥6 才能做统计推断")
+        write_diff(os.path.join(mdir, "records", "diff.md"), acc, mod, None,
+                   {"outputs": outputs_r, "parameters": {"run_deseq2": run_de},
+                    "conclusion": ("描述性 QC 完成，未做统计推断" if not run_de else "DESeq2 完成")})
+        write_checkpoint(os.path.join(mdir, "records", "checkpoint.yaml"), acc, mod, run_id, seq, outputs_r)
+        write_next_tasklist(os.path.join(mdir, "records", "next_tasklist.md"), acc, mod, t21,
+                            ["pathway_enrichment"] if run_de else [])
+        run_state["steps"].append({"module_id": mod, "status": "success" if ok_r else "failed"})
+        methods.append({"method_id": "M010", "module_id": mod,
+                        "description": "RNA-seq 计数质控" + ("+ DESeq2 负二项广义线性模型（Wald 检验，BH 校正）" if run_de else ""),
+                        "software": "DESeq2" if run_de else "base R", "version": "Bioconductor 3.18"})
+        produced_figures += [o["path"] for o in outputs_r
+                             if o["format"] == "pdf" and os.path.exists(os.path.join(ws, o["path"]))]
+        if not run_de:
+            reason = f"T21 {t21['status']}：{t21['message']}；差异表达与富集被阻断，只保留描述性结果"
+            print(f"[{acc}] {reason}")
+            run_state["steps"].append({"module_id": "pathway_enrichment", "status": "blocked", "reason": reason})
+        else:
+            run_state["steps"].append(
+                {"module_id": "pathway_enrichment", "status": "pending",
+                 "reason": "需先适配 org_db（物种相关注释包），下一轮启用"})
+        if not ok_r:
+            dump_yaml(os.path.join(mdir, "records", "error_log.yaml"),
+                      {"module_id": mod, "run_id": run_id, "returncode": rc_r, "timestamp": ts})
+            run_state["status"] = "failed"
+            dump_yaml(os.path.join(ws, "analysis", "_runs", run_id, "run.yaml"), run_state)
+            return 1
+
+    elif data_type != "microarray":
+        reason = f"数据类型为 {data_type}，本轮 P1 只做数据可用性判定，不套用微阵列/RNA-seq 流程"
         print(f"[{acc}] {reason}")
         run_state["steps"].append({"module_id": "analysis_skipped", "status": "skipped", "reason": reason})
     elif t21["status"] == "fail":

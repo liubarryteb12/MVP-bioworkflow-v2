@@ -88,7 +88,7 @@ jobs:
 
       - name: Install Bioconductor packages (one by one, never abort)
         run: |
-          for p in GEOquery limma affy org.Hs.eg.db GO.db hgu133plus2.db hgu95av2.db matrixStats; do
+          for p in GEOquery limma affy DESeq2 org.Hs.eg.db org.Mm.eg.db GO.db hgu133plus2.db hgu95av2.db matrixStats gplots; do
             echo "=== installing $p ==="
             Rscript -e "BiocManager::install('$p', ask = FALSE, update = FALSE, Ncpus = 4)" 2>&1 | tail -3 || echo "FAILED: $p"
           done
