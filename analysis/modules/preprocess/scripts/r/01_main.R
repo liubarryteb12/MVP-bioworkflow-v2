@@ -17,6 +17,10 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1) stop("usage: Rscript 01_main.R <input.json>")
 cfg <- jsonlite::fromJSON(args[1])
 
+# rma()/mas5calls() 经 preprocessCore 走 OpenMP 多线程；在受限容器（GitHub Actions runner）里
+# 会出现 "return code from pthread_create() is 22"，强制单线程可规避。
+Sys.setenv(OMP_NUM_THREADS = "1")
+
 set.seed(cfg$meta$random_seed)
 
 log_path <- cfg$log$path
