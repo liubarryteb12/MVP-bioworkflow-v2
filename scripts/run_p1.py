@@ -338,6 +338,12 @@ def build_count_matrix(workspace: str, dataset: str) -> str | None:
         d = d.select_dtypes("number")
         if d.shape[1] < 1:
             continue
+        # 若某个文件本身已含 ≥2 个数值列，它就是多样本矩阵，直接选用，绝不拆解合并
+        if d.shape[1] >= 2:
+            out_rel = os.path.join("inputs", "metadata", f"{dataset}_count_matrix.csv")
+            d.to_csv(os.path.join(workspace, out_rel))
+            print(f"[{dataset}] 检测到多样本矩阵 {os.path.basename(p)}（{d.shape[0]} × {d.shape[1]}），直接选用")
+            return out_rel.replace("\\", "/")
         d = d.iloc[:, [0]]
         d.columns = [os.path.basename(p).split(".")[0]]
         frames.append(d)

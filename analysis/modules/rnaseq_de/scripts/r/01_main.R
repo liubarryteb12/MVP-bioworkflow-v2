@@ -78,11 +78,14 @@ pdf(get_out("qc_correlation"), width = 6, height = 5)
 if (ncol(lcpm) > 1 && nrow(lcpm) > 1) {
   cm <- cor(lcpm[, ], method = "spearman")
   cm[!is.finite(cm)] <- 0
-  if (requireNamespace("gplots", quietly = TRUE)) {
+  # heatmap.2 在样本数过少（<3）且相关矩阵取值退化时会崩在 seq.default(min.raw, max.raw)
+  if (ncol(lcpm) >= 3 && requireNamespace("gplots", quietly = TRUE)) {
     gplots::heatmap.2(cm, trace = "none", main = "Sample correlation (Spearman)",
                       col = colorRampPalette(c("#2166AC", "white", "#B2182B"))(50))
   } else {
-    image(cm, main = "Sample correlation (Spearman)")
+    image(cm, main = "Sample correlation (Spearman)", axes = FALSE)
+    axis(1, at = seq(0, 1, length.out = ncol(cm)), labels = colnames(cm), las = 2)
+    axis(2, at = seq(0, 1, length.out = nrow(cm)), labels = rownames(cm), las = 2)
   }
 } else {
   plot.new(); text(0.5, 0.5, "not enough data for correlation")
