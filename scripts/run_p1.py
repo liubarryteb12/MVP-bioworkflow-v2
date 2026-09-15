@@ -305,6 +305,55 @@ def find_matrix_file(workspace: str, dataset: str) -> str | None:
     return rel.replace("\\", "/")
 
 
+def build_count_matrix(workspace: str, dataset: str) -> str | None:
+    """GEO 常见"每样本一个文件"的布局（如 GSE174263 的 GSM*.tab.gz）。
+
+    把它们合并成一个 gene × sample 的计数矩阵，落到 inputs/metadata/。
+    合并失败返回 None，交由 find_matrix_file 走单文件回退。
+    """
+    try:
+        import pandas as pd
+    except ImportError:
+        return None
+
+    root = os.path.join(workspace, "inputs", "raw", dataset)
+    if not os.path.isdir(root):
+        return None
+    exts = (".tab", ".tab.gz", ".txt", ".txt.gz", ".csv", ".csv.gz")
+    files = []
+    for r, _, fs in os.walk(root):
+        for fn in fs:
+            low = fn.lower()
+            if low.endswith(exts) and "meta" not in low and "readme" not in low:
+                files.append(os.path.join(r, fn))
+    if len(files) < 2:
+        return None
+
+    frames = []
+    for p in sorted(files):
+        try:
+            d = pd.read_csv(p, sep=None, engine="python", index_col=0)
+        except Exception:
+            continue
+        d = d.select_dtypes("number")
+        if d.shape[1] < 1:
+            continue
+        d = d.iloc[:, [0]]
+        d.columns = [os.path.basename(p).split(".")[0]]
+        frames.append(d)
+
+    if len(frames) < 2:
+        return None
+
+    mat = pd.concat(frames, axis=1)
+    mat = mat[~mat.index.astype(str).duplicated(keep="first")]
+    mat = mat.fillna(0)
+    out_rel = os.path.join("inputs", "metadata", f"{dataset}_count_matrix.csv")
+    mat.to_csv(os.path.join(workspace, out_rel))
+    print(f"[{dataset}] 合并 {len(frames)} 个单样本文件 → {out_rel}（{mat.shape[0]} genes × {mat.shape[1]} samples）")
+    return out_rel.replace("\\", "/")
+
+
 def write_sample_sheet(workspace: str, dataset: str, groups: dict) -> str:
     rel = os.path.join("inputs", "metadata", f"{dataset}_sample_sheet.csv")
     abs_p = os.path.join(workspace, rel)
@@ -394,7 +443,7 @@ def main() -> int:
 
     if data_type == "rna_seq":
         # RNA-seq：计数矩阵 QC（总是做）+ DESeq2（仅 T21 通过才做）
-        matrix_rel = find_matrix_file(ws, acc)
+        matrix_rel = build_count_matrix(ws, acc) or find_matrix_file(ws, acc)
         if not matrix_rel or not sample_sheet_rel:
             err = "未找到计数矩阵或样本表，无法继续"
             print(f"[{acc}] {err}")
