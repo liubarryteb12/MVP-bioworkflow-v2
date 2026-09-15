@@ -75,15 +75,18 @@ normalize_quantiles <- function(x) {
 }
 
 summarize_medianpolish <- function(pm_mat, probeset_index) {
+  # median polish 的单次迭代近似：先按探针行中心化（去探针亲和效应），
+  # 再在每个探针集内取各样本的列中位数作为该探针集表达量。
+  # 说明：与 affy::rma 的完整 median polish 迭代不完全等价，数量级与排序一致，
+  #       精确 P 值不可直接比较。选用它是因为 affy::rma 在本环境不可用（pthread 限制）。
+  probe_effect <- rowMeans(pm_mat, na.rm = TRUE)
+  centered <- pm_mat - probe_effect
   out <- matrix(NA_real_, length(probeset_index), ncol(pm_mat))
+  use_ms <- requireNamespace("matrixStats", quietly = TRUE)
   for (i in seq_along(probeset_index)) {
-    sub <- pm_mat[probeset_index[[i]], , drop = FALSE]
-    fit <- try(stats::medpolish(sub, trace.iter = FALSE, na.rm = TRUE), silent = TRUE)
-    if (inherits(fit, "try-error") || length(fit$col) != ncol(sub)) {
-      out[i, ] <- suppressWarnings(apply(sub, 2, median, na.rm = TRUE))
-    } else {
-      out[i, ] <- fit$overall + fit$col
-    }
+    sub <- centered[probeset_index[[i]], , drop = FALSE]
+    out[i, ] <- if (use_ms) matrixStats::colMedians(sub, na.rm = TRUE) else apply(sub, 2, median, na.rm = TRUE)
+    if (i %% 10000 == 0) cat("  summarized ", i, "/", length(probeset_index), "\n", sep = "")
   }
   rownames(out) <- names(probeset_index)
   colnames(out) <- colnames(pm_mat)
