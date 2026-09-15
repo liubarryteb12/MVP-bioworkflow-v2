@@ -50,13 +50,14 @@ def case(
     )
 
 
-def _ctx_from_fixture(fixture: Dict[str, Any]) -> Context:
+def _ctx_from_fixture(fixture: Dict[str, Any], meta: Dict[str, Any] | None = None) -> Context:
     ctx = Context(workspace=".")
     ctx.docs = copy.deepcopy(fixture)
+    ctx.meta.update(meta or {})
     return ctx
 
 
-def run_part_mutations(part: str, fixture: Dict[str, Any]) -> Dict[str, Any]:
+def run_part_mutations(part: str, fixture: Dict[str, Any], meta: Dict[str, Any] | None = None) -> Dict[str, Any]:
     cases = CASES.get(part, [])
     results: Dict[str, Any] = {
         "part": part,
@@ -67,7 +68,7 @@ def run_part_mutations(part: str, fixture: Dict[str, Any]) -> Dict[str, Any]:
     }
     for mc in cases:
         # 1) 基线
-        base_ctx = _ctx_from_fixture(fixture)
+        base_ctx = _ctx_from_fixture(fixture, meta)
         baseline: Finding = run_check(base_ctx, mc.check_id)
 
         # 2) 注入
@@ -75,11 +76,12 @@ def run_part_mutations(part: str, fixture: Dict[str, Any]) -> Dict[str, Any]:
         mc.mutate(mutated)
         mut_ctx = Context(workspace=".")
         mut_ctx.docs = mutated
+        mut_ctx.meta.update(meta or {})
         after: Finding = run_check(mut_ctx, mc.check_id)
         caught = after.status == FAIL if mc.expect_fail else after.status == PASS
 
         # 3) 恢复
-        rest_ctx = _ctx_from_fixture(fixture)
+        rest_ctx = _ctx_from_fixture(fixture, meta)
         restored: Finding = run_check(rest_ctx, mc.check_id)
 
         if baseline.status != PASS:

@@ -79,6 +79,7 @@ def declare(check_id: str, part: str, tier: str, anchor: str, description: str):
 class Context:
     workspace: str = "."
     docs: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)  # 运行参数（如 dataset），不参与字段检查
 
     def doc(self, relpath: str) -> Any:
         if relpath not in self.docs:

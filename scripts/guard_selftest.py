@@ -5,9 +5,10 @@
 抓不到 = 空规，不计入通过（总纲要 §18）。
 
 用法：
-    python scripts/guard_selftest.py --part P4 --fixture   # 骨架自测：内置基线，不读工作空间
-    python scripts/guard_selftest.py --part P4             # 真实运行：读工作空间已产出的接口文件
-    python scripts/guard_selftest.py --part P4 --check     # 只跑判据，不跑变异
+    python scripts/guard_selftest.py --part P4 --fixture            # 骨架自测：内置基线
+    python scripts/guard_selftest.py --part P1 --fixture --dataset GSE7451
+    python scripts/guard_selftest.py --part P1 --dataset GSE7451    # 真实运行：读工作空间产出
+    python scripts/guard_selftest.py --part P4 --check              # 只跑判据，不跑变异
 """
 
 from __future__ import annotations
@@ -21,12 +22,8 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 from guards import base, mutation  # noqa: E402
-from guards import checks_p4  # noqa: F401,E402  注册 P4 判据与变异用例
-
-try:
-    from guards import fixtures_p4
-except ImportError:  # pragma: no cover
-    fixtures_p4 = None
+from guards import checks_p1, checks_p4  # noqa: F401,E402  注册 P1 / P4 判据与变异用例
+from guards import fixtures_p4  # noqa: E402
 
 OUT_PATHS = {
     "P1": "analysis/_runs/mutation_results.json",
@@ -36,15 +33,31 @@ OUT_PATHS = {
 }
 
 
-def _rels_for(part: str):
-    if part == "P4" and fixtures_p4 is not None:
+def _fixture_for(part: str, dataset: str) -> dict:
+    if part == "P4":
+        return fixtures_p4.FIXTURE
+    if part == "P1":
+        return checks_p1._fig_fixture(dataset or "GSE7451")
+    return {}
+
+
+def _rels_for(part: str, dataset: str) -> list:
+    if part == "P4":
         return list(fixtures_p4.FIXTURE.keys())
+    if part == "P1":
+        acc = (dataset or "GSE7451").upper()
+        return [
+            f"inputs/migration_log_{acc}.yaml",
+            f"analysis/_index/data_availability_{acc}.yaml",
+            f"analysis/_index/figure_export_{acc}.yaml",
+            f"analysis/_index/p1_to_p2_evidence_{acc}.yaml",
+        ]
     return []
 
 
-def _load_fixture(workspace: str, part: str) -> dict:
+def _load_fixture(workspace: str, part: str, dataset: str) -> dict:
     ctx = base.Context(workspace=workspace)
-    for rel in _rels_for(part):
+    for rel in _rels_for(part, dataset):
         ctx.doc(rel)
     return ctx.docs
 
@@ -68,28 +81,32 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="P1-P4 守卫自测与变异测试")
     ap.add_argument("--workspace", default=".", help="project_root 路径")
     ap.add_argument("--part", default="P4", choices=["P1", "P2", "P3", "P4"])
+    ap.add_argument("--dataset", default=None, help="数据集编号（P1 需要，如 GSE7451）")
     ap.add_argument("--fixture", action="store_true", help="用内置最小合规基线（骨架自测）")
     ap.add_argument("--check", action="store_true", help="只跑判据，不跑变异")
     ap.add_argument("--out", default=None, help="变异结果输出路径")
     args = ap.parse_args()
 
+    dataset = (args.dataset or "").upper() or None
+
     if args.fixture:
-        if fixtures_p4 is None or args.part != "P4":
-            print("内置 fixture 目前仅支持 P4")
+        fixture = _fixture_for(args.part, dataset)
+        if not fixture:
+            print(f"内置 fixture 暂不支持 {args.part}")
             return 2
-        fixture = fixtures_p4.FIXTURE
     else:
-        fixture = _load_fixture(args.workspace, args.part)
+        fixture = _load_fixture(args.workspace, args.part, dataset)
 
     ctx = base.Context(workspace=args.workspace)
     ctx.docs = fixture
+    ctx.meta["dataset"] = dataset
     findings = base.run_part(ctx, args.part)
     _print_check_summary(args.part, findings)
 
     if args.check:
         return 0 if all(f.status != "fail" for f in findings) else 1
 
-    results = mutation.run_part_mutations(args.part, fixture)
+    results = mutation.run_part_mutations(args.part, fixture, meta={"dataset": dataset})
     out = args.out or os.path.join(args.workspace, OUT_PATHS[args.part])
     mutation.write_results(results, out)
 
