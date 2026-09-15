@@ -28,7 +28,7 @@ on:
         required: false
         default: 'true'
   push:
-    branches: [v2-end-to-end]
+    branches: [main]
     paths:
       - '.github/triggers/*.flag'
 

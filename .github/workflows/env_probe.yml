@@ -14,7 +14,7 @@ name: Env Probe (R/Bioconductor)
 on:
   workflow_dispatch:
   push:
-    branches: [v2-end-to-end]
+    branches: [main]
     paths:
       - '.github/workflows/env_probe.yml'
 
