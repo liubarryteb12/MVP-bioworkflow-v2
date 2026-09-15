@@ -115,8 +115,13 @@ jobs:
         run: |
           python scripts/data_availability.py --dataset "$DATASET_ID" --workspace . --no-proxy
 
+      # preprocessCore（affy::rma）在受限容器里 pthread_create 报 EINVAL(22)：
+      # 栈限制过小 + 多线程同时创建。先放宽栈限制，再退到单线程。
       - name: Run P1 analysis
         run: |
+          ulimit -s unlimited 2>/dev/null || ulimit -s 65536 2>/dev/null || echo "cannot raise stack limit"
+          echo "stack limit: $(ulimit -s)"
+          nproc
           python scripts/run_p1.py --workspace . --dataset "$DATASET_ID"
 
       - name: Guard self-test (P4 checks)

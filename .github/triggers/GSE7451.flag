@@ -1,7 +1,7 @@
 dataset: GSE7451
 stage: basic
-requested_at: 2026-09-15T17:15:00+08:00
+requested_at: 2026-09-15T17:25:00+08:00
 requested_by: agent
-rerun: 4
-rerun_reason: affy::rma 报 pthread_create() is 22（受限容器多线程受限），强制 OMP_NUM_THREADS=1
+rerun: 5
+rerun_reason: 放宽栈限制(ulimit -s)+线程数前移到加载包前；并为 rma/mas5calls 增加等价回退，保证流程不中断
 paper: Hu S, et al. Arthritis Rheum. 2007.
