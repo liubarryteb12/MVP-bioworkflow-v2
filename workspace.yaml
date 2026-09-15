@@ -1,0 +1,118 @@
+workspace_id: ws_20260915_150000
+project_id: project_v2_e2e
+project_name: P1-P4 端到端验证（第二版）
+created_at: 2026-09-15T15:00:00+08:00
+created_by: agent
+user: 用户
+path: d:/00.AIagent/codebuddy_workspace/生信分析+SCI文章写作工作流搭建/第二版/05.工作空间
+status: initialized
+
+spec_version:
+  master_outline: 2.0
+  p1: 1.2
+  p2: 1.1
+  p3: 1.1
+  p4: 1.0
+
+directories:
+  inputs: inputs/
+  analysis: analysis/
+  writing: 02_writing/
+  typesetting: 03_typesetting/
+  journal: 04_journal/
+  handoff: handoff/
+  checkpoints: checkpoints/
+  next_tasklist: next_tasklist/
+  logs: logs/
+
+rules:
+  inputs_readonly: true
+  cache_rebuildable: true
+  results_preserved: true
+  # 元原则（总纲要 §22 十五条）
+  meta_principles:
+    - id: 1
+      name: 数字唯一来源
+      scope: [P1, P2, P3, P4]
+    - id: 2
+      name: 三态判定（pass / fail / N/A）
+      scope: [P1, P2, P3, P4]
+    - id: 3
+      name: 变异测试
+      scope: [P1, P2, P3, P4]
+    - id: 4
+      name: 自指处理
+      scope: [P1, P2, P3, P4]
+    - id: 5
+      name: 单一入口
+      scope: [P1, P2, P3, P4]
+    - id: 6
+      name: 第 11 条陷阱
+      scope: [P1, P2, P3, P4]
+    - id: 7
+      name: 先红后绿
+      scope: [P1, P2, P3, P4]
+    - id: 8
+      name: 唯一真源
+      scope: [P1, P2, P3, P4]
+    - id: 9
+      name: 排版不得升级 claim
+      scope: [P2, P3]
+    - id: 10
+      name: 措辞强度 ≤ 证据上限
+      scope: [P2, P3]
+    - id: 11
+      name: 双轨行距（审稿版 / 安全版）
+      scope: [P3]
+    - id: 12
+      name: 图片先分流，再谈参数
+      scope: [P1, P3]
+    - id: 13
+      name: 能用矢量就用矢量
+      scope: [P1, P3]
+    - id: 14
+      name: 图题在图下、表题在表上
+      scope: [P2, P3]
+    - id: 15
+      name: 导出前参考文献转纯文本
+      scope: [P2, P3]
+  # 本机纪律：不在本机跑分析，本机只存云端结果
+  local_policy:
+    run_analysis_locally: false
+    reason: 本机只负责驱动与存放云端回传结果，计算全部由 GitHub Actions 执行
+    push_proxy: http://127.0.0.1:7890
+
+execution:
+  backend: github_actions
+  github_actions:
+    repo: liubarryteb12/mvp-bioframework-test
+    branch: v2-end-to-end
+    workflow: end_to_end_validation.yml
+    enabled: true
+    timeout_minutes: 360
+
+datasets:
+  basic:
+    - id: GSE7451
+      priority: 1
+      platform: GPL570
+      expected_t21: pass
+    - id: GSE2379
+      priority: 2
+      platform: GPL91
+      expected_t21: fail
+    - id: GSE10036
+      priority: 3
+      platform: GPL9062
+      expected_t21: fail
+  advanced:
+    - id: GSE251926
+      priority: 4
+    - id: GSE255370
+      priority: 5
+    - id: GSE292083
+      priority: 6
+
+budgets:
+  dormant_ratio_max: 0.20
+  global_ratio_max: 0.10

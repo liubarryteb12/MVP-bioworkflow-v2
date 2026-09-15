@@ -1,0 +1,35 @@
+[
+  {
+    "accession": "GSE7451",
+    "status": "ok",
+    "title": "Primary Sjogren's syndrome and control whole saliva",
+    "n_samples": 20,
+    "platform_id": "GPL570",
+    "organism": "Homo sapiens",
+    "type": "Expression profiling by array",
+    "pubmed_id": "17968930",
+    "yaml": "04_journal/snapshots/geo_meta/GSE7451_meta.yaml"
+  },
+  {
+    "accession": "GSE2379",
+    "status": "ok",
+    "title": "Hypopharyngeal_cancer_transcriptome",
+    "n_samples": 38,
+    "platform_id": "GPL8300",
+    "organism": "Homo sapiens",
+    "type": "Expression profiling by array",
+    "pubmed_id": "14676830",
+    "yaml": "04_journal/snapshots/geo_meta/GSE2379_meta.yaml"
+  },
+  {
+    "accession": "GSE10036",
+    "status": "ok",
+    "title": "Small RNAs in four Argonaute complexes in Arabidopsis",
+    "n_samples": 4,
+    "platform_id": "GPL9062",
+    "organism": "Arabidopsis thaliana",
+    "type": "Non-coding RNA profiling by high throughput sequencing",
+    "pubmed_id": "18342361",
+    "yaml": "04_journal/snapshots/geo_meta/GSE10036_meta.yaml"
+  }
+]

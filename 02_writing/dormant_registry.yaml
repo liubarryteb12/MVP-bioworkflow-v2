@@ -1,0 +1,50 @@
+# P2 休眠登记
+# 规则：休眠比例 ≤ 20%；激活条件满足时必须激活，激活后从本表移除并记入 activation_log
+registry_version: 1.0
+updated_at: 2026-09-15T15:00:00+08:00
+owner: P2
+
+dormant:
+  - id: B1
+    rule: 双盲稿匿名化
+    reason: 目标期刊未定
+    activate_when: target_journal 确定且为双盲刊
+    source: 02.P2/P2纲要.txt §22
+
+  - id: B2
+    rule: 报告规范清单（CONSORT/STROBE/PRISMA/STARD/TRIPOD/ARRIVE/CARE/SAGER）
+    reason: 研究类型未定
+    activate_when: study_type 确定
+    source: 02.P2/P2纲要.txt §22
+
+  - id: B3
+    rule: Highlights / Graphical Abstract（3–5 条，每条 ≤85 字符；GA 531×1328 px）
+    reason: 目标刊非 Elsevier
+    activate_when: target_publisher == Elsevier
+    source: 02.P2/P2纲要.txt §22
+
+  - id: B6
+    rule: Reporting Summary
+    reason: 目标刊非 Nature 系
+    activate_when: target_publisher ∈ Nature 系
+    source: 02.P2/P2纲要.txt §22
+
+  - id: B7
+    rule: 分社差异参数（摘要字数/关键词数/标题层级/篇幅/图表数/参考文献数）
+    reason: 目标刊未定
+    activate_when: target_journal 确定
+    source: 02.P2/P2纲要.txt §22
+
+  - id: B8
+    rule: 伦理声明具体句式
+    reason: 未涉及人体/动物
+    activate_when: 涉及人体/动物
+    source: 02.P2/P2纲要.txt §22
+
+  - id: B9
+    rule: 数据可用性登录号（GSE/SRR/DOI）
+    reason: 无组学数据（待 P1 数据可用性分析后判定）
+    activate_when: 有组学数据
+    source: 02.P2/P2纲要.txt §22
+
+activation_log: []
