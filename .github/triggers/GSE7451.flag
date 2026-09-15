@@ -1,0 +1,6 @@
+dataset: GSE7451
+stage: basic
+requested_at: 2026-09-15T16:50:00+08:00
+requested_by: agent
+purpose: P1-P4 端到端验证 · 基础集第 1 个（10 vs 10 平衡，T21 预期 pass）
+paper: Hu S, et al. Arthritis Rheum. 2007.

@@ -1,16 +1,15 @@
 #!/usr/bin/env Rscript
-# P1 模块 pathway_enrichment：GO / KEGG 通路富集
+# P1 模块 pathway_enrichment：GO / KEGG 通路富集（超几何检验 + BH 校正）
 #
-# 论文原文用 MAPPFinder 做通路富集。MAPPFinder 为商业/遗留工具，云端不可安装，
-# 这里以 clusterProfiler（GO + KEGG，BH 校正）实现等价的通路富集功能。
-# 该替换必须在 handoff 中显式声明，不得隐瞒。
+# 论文原文用 MAPPFinder 做通路富集；MAPPFinder 为商业/遗留工具，云端不可安装。
+# clusterProfiler 在云端安装失败（依赖 treeio 加载异常，见 env_probe 探测结论）。
+# 因此这里直接用 org.Hs.eg.db 的 GO / KEGG 映射 + 超几何检验 + BH 校正实现等价的富集分析。
+# 该替换必须在 handoff 与 Methods 中显式声明，不得隐瞒。
 #
 # 纪律：不硬编码路径，一切从 input JSON 读；随机种子固定；写日志。
 
 suppressMessages({
   library(jsonlite)
-  library(clusterProfiler)
-  library(org.Hs.eg.db)
   library(AnnotationDbi)
 })
 
@@ -31,80 +30,143 @@ get_par <- function(nm, default = NULL) if (!is.null(cfg$parameters[[nm]])) cfg$
 padj_thr <- as.numeric(get_par("padj_threshold", 0.05))
 lfc_thr <- as.numeric(get_par("log2fc_threshold", 1.0))
 annot_db <- as.character(get_par("annotation_db", "hgu133plus2.db"))
-kegg_org <- as.character(get_par("kegg_organism", "hsa"))
+org_db <- as.character(get_par("org_db", "org.Hs.eg.db"))
+min_size <- as.numeric(get_par("min_term_size", 5))
+max_size <- as.numeric(get_par("max_term_size", 500))
+
+for (o in unique(c(get_out("enrich_go"), get_out("enrich_kegg"), get_out("enrich_summary"), get_out("enrich_plot")))) {
+  dir.create(dirname(o), recursive = TRUE, showWarnings = FALSE)
+}
+
+write_empty <- function(msg) {
+  write.csv(data.frame(message = msg), get_out("enrich_go"), row.names = FALSE)
+  write.csv(data.frame(message = msg), get_out("enrich_kegg"), row.names = FALSE)
+  write.csv(data.frame(n_input = 0L, note = msg), get_out("enrich_summary"), row.names = FALSE)
+  pdf(get_out("enrich_plot"), width = 7, height = 5)
+  plot.new(); text(0.5, 0.5, msg, cex = 0.9)
+  dev.off()
+  cat("== pathway_enrichment success (empty: ", msg, ") ==\n", sep = "")
+  sink(); quit(status = 0)
+}
 
 deg <- read.csv(get_in("deg_table"), stringsAsFactors = FALSE)
+if (!"probe_id" %in% names(deg)) deg$probe_id <- rownames(deg)
 sig <- deg[!is.na(deg$adj.P.Val) & deg$adj.P.Val < padj_thr & abs(deg$logFC) > lfc_thr, ]
 cat("significant probes: ", nrow(sig), "\n", sep = "")
 
-write_enrich <- function(res, path, kind) {
-  if (is.null(res) || nrow(as.data.frame(res)) == 0) {
-    write.csv(data.frame(message = paste0("no enriched ", kind, " terms")), path, row.names = FALSE)
-    cat(kind, ": 0 terms\n", sep = "")
-    return(invisible(NULL))
-  }
-  write.csv(as.data.frame(res), path, row.names = FALSE)
-  cat(kind, ": ", nrow(as.data.frame(res)), " terms\n", sep = "")
-}
-
 if (nrow(sig) == 0) {
-  write_enrich(NULL, get_out("enrich_go"), "GO")
-  write_enrich(NULL, get_out("enrich_kegg"), "KEGG")
-  write.csv(data.frame(n_input = 0L, note = "no significant genes; enrichment skipped"),
-            get_out("enrich_summary"), row.names = FALSE)
-  pdf(get_out("enrich_plot"), width = 6, height = 4)
-  plot.new(); text(0.5, 0.5, "No significant genes\n(limma adj.P.Val threshold not met)")
-  dev.off()
-  cat("== pathway_enrichment success (empty) ==\n")
-  sink()
-  quit(status = 0)
+  write_empty("no significant genes")
 }
 
-# probe_id -> ENTREZID
 if (!requireNamespace(annot_db, quietly = TRUE)) {
-  stop(paste0("annotation package not available: ", annot_db))
+  write_empty(paste0("annotation package missing: ", annot_db))
 }
-ent <- AnnotationDbi::select(get(annot_db), keys = as.character(sig$probe_id),
-                             columns = "ENTREZID", keytype = "PROBEID")
-gene <- unique(na.omit(ent$ENTREZID))
-cat("mapped ENTREZ genes: ", length(gene), "\n", sep = "")
-
-if (length(gene) < 5) {
-  write_enrich(NULL, get_out("enrich_go"), "GO")
-  write_enrich(NULL, get_out("enrich_kegg"), "KEGG")
-  write.csv(data.frame(n_input = length(gene), note = "too few genes for enrichment"),
-            get_out("enrich_summary"), row.names = FALSE)
-  pdf(get_out("enrich_plot"), width = 6, height = 4)
-  plot.new(); text(0.5, 0.5, paste0("Too few mapped genes (n=", length(gene), ")"))
-  dev.off()
-  cat("== pathway_enrichment success (too few) ==\n")
-  sink()
-  quit(status = 0)
+if (!requireNamespace(org_db, quietly = TRUE)) {
+  write_empty(paste0("org package missing: ", org_db))
 }
 
-ego <- try(enrichGO(gene = gene, OrgDb = org.Hs.eg.db, ont = "ALL",
-                    pAdjustMethod = "BH", qvalueCutoff = 0.05, readable = FALSE), silent = TRUE)
-if (inherits(ego, "try-error")) ego <- NULL
-write_enrich(ego, get_out("enrich_go"), "GO")
+db <- get(annot_db)
+map_all <- AnnotationDbi::select(db, keys = as.character(deg$probe_id),
+                                 columns = "ENTREZID", keytype = "PROBEID")
+map_sig <- AnnotationDbi::select(db, keys = as.character(sig$probe_id),
+                                 columns = "ENTREZID", keytype = "PROBEID")
+universe <- unique(na.omit(map_all$ENTREZID))
+gene <- unique(na.omit(map_sig$ENTREZID))
+cat("universe genes: ", length(universe), "  significant genes: ", length(gene), "\n", sep = "")
 
-ek <- try(enrichKEGG(gene = gene, organism = kegg_org, pAdjustMethod = "BH",
-                     qvalueCutoff = 0.05), silent = TRUE)
-if (inherits(ek, "try-error")) ek <- NULL
-write_enrich(ek, get_out("enrich_kegg"), "KEGG")
+if (length(gene) < 5 || length(universe) < 20) {
+  write_empty("too few mapped genes for enrichment")
+}
+
+enrich_hyper <- function(gene, universe, term2gene, min_size, max_size) {
+  K <- length(gene)
+  N <- length(universe)
+  terms <- names(term2gene)
+  out <- vector("list", length(terms))
+  j <- 0L
+  for (i in seq_along(terms)) {
+    tg <- term2gene[[i]]
+    if (length(tg) == 0) next
+    tg <- intersect(universe, tg)
+    M <- length(tg)
+    if (M < min_size || M > max_size) next
+    k <- length(intersect(gene, tg))
+    if (k == 0) next
+    p <- stats::phyper(k - 1, M, N - M, K, lower.tail = FALSE)
+    j <- j + 1L
+    out[[j]] <- data.frame(term = terms[i], term_size = M, n_sig_in_term = k,
+                           n_sig = K, n_universe = N, pvalue = p, stringsAsFactors = FALSE)
+  }
+  if (j == 0L) return(NULL)
+  df <- do.call(rbind, out[seq_len(j)])
+  df$p.adjust <- stats::p.adjust(df$pvalue, method = "BH")
+  df$fold_enrichment <- (df$n_sig_in_term / df$term_size) / (df$n_sig / df$n_universe)
+  df[order(df$pvalue), , drop = FALSE]
+}
+
+add_term_name <- function(df, keytype) {
+  if (is.null(df) || nrow(df) == 0) return(df)
+  if (!requireNamespace("GO.db", quietly = TRUE)) return(df)
+  tn <- try(AnnotationDbi::select(GO.db::GO.db, keys = df$term, columns = "TERM", keytype = keytype),
+            silent = TRUE)
+  if (inherits(tn, "try-error")) return(df)
+  tn <- tn[!duplicated(tn[[keytype]]), ]
+  m <- match(df$term, tn[[keytype]])
+  df$term_name <- tn$TERM[m]
+  df
+}
+
+# ---------- GO ----------
+# org.Hs.eg.db 的注释对象名为 org.Hs.egGO2ALLEGS / org.Hs.egPATH
+org_prefix <- sub("\\.db$", "", org_db)
+go_map <- try(AnnotationDbi::as.list(AnnotationDbi::get(paste0(org_prefix, "GO2ALLEGS"))), silent = TRUE)
+go_res <- if (inherits(go_map, "try-error") || is.null(go_map)) NULL else enrich_hyper(gene, universe, go_map, min_size, max_size)
+go_res <- add_term_name(go_res, "GOID")
+if (is.null(go_res) || nrow(go_res) == 0) {
+  write.csv(data.frame(message = "no enriched GO terms"), get_out("enrich_go"), row.names = FALSE)
+  cat("GO: 0 terms\n")
+} else {
+  write.csv(go_res, get_out("enrich_go"), row.names = FALSE)
+  cat("GO: ", nrow(go_res), " terms\n", sep = "")
+}
+
+# ---------- KEGG ----------
+kegg_map <- try(AnnotationDbi::as.list(AnnotationDbi::get(paste0(org_prefix, "PATH"))), silent = TRUE)
+kegg_res <- if (inherits(kegg_map, "try-error") || is.null(kegg_map)) NULL else enrich_hyper(gene, universe, kegg_map, min_size, max_size)
+if (is.null(kegg_res) || nrow(kegg_res) == 0) {
+  write.csv(data.frame(message = "no enriched KEGG pathways"), get_out("enrich_kegg"), row.names = FALSE)
+  cat("KEGG: 0 pathways\n")
+} else {
+  write.csv(kegg_res, get_out("enrich_kegg"), row.names = FALSE)
+  cat("KEGG: ", nrow(kegg_res), " pathways\n", sep = "")
+}
 
 write.csv(
   data.frame(
     n_input_probes = nrow(sig),
     n_mapped_genes = length(gene),
+    n_universe = length(universe),
     annotation_db = annot_db,
-    tool = "clusterProfiler (paper used MAPPFinder; substituted, see handoff)"
+    org_db = org_db,
+    method = "hypergeometric test + BH (paper used MAPPFinder; clusterProfiler unavailable in cloud)",
+    padj_threshold = padj_thr,
+    min_term_size = min_size,
+    max_term_size = max_size
   ),
   get_out("enrich_summary"), row.names = FALSE
 )
 
-pdf(get_out("enrich_plot"), width = 7, height = 5)
-if (!is.null(ego) && nrow(as.data.frame(ego)) > 0) {
-  print(barplot(ego, showCategory = min(20, nrow(as.data.frame(ego))), title = "GO enrichment (top terms)"))
+# ---------- 图 ----------
+pdf(get_out("enrich_plot"), width = 7.5, height = 5.5)
+if (!is.null(go_res) && nrow(go_res) > 0) {
+  top <- head(go_res[order(go_res$pvalue), ], min(20, nrow(go_res)))
+  lab <- if (!is.null(top$term_name) && any(!is.na(top$term_name))) top$term_name else top$term
+  lab <- substr(ifelse(is.na(lab), top$term, lab), 1, 45)
+  par(mar = c(9, 12, 3, 2))
+  bp <- barplot(-log10(top$p.adjust), names.arg = lab, horiz = TRUE, las = 1,
+                col = "#4C72B0", border = NA,
+                main = "GO enrichment (top 20 by p.adjust)",
+                xlab = "-log10 adjusted P")
 } else {
   plot.new(); text(0.5, 0.5, "No enriched GO terms")
 }

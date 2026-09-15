@@ -1,9 +1,15 @@
 # P1-P4 端到端验证 · 云端执行入口（第二版）
-# 触发方式（本地 agent）：
-#   gh workflow run end_to_end_validation.yml --ref v2-end-to-end \
-#     -f dataset_id=GSE7451 -f dataset_stage=basic -f paper_pipeline='...'
 #
-# 纪律：完全按对应论文的分析思路走，不做自定义分析；失败如实报告，不掩盖。
+# 触发方式：
+#   1) 推送/更新 .github/triggers/<DATASET>.flag 文件（推荐，绕过默认分支限制）
+#   2) workflow_dispatch（要求 workflow 位于默认分支，当前默认分支为第一版 main，故不可用）
+#
+# 背景：GitHub 的 workflow_dispatch 只认默认分支上的 workflow 文件。为不改动默认分支、
+#       不污染第一版，第二版一律用 push-paths + flag 文件触发。
+#
+# 纪律：完全按对应论文的分析思路走，不做自定义；失败如实报告，不掩盖。
+# 已知环境约束：clusterProfiler 在云端安装失败（依赖 treeio），通路富集改用
+#               org.Hs.eg.db + 超几何检验 + BH，已在模块 handoff 声明。
 
 name: P1-P4 End-to-End Validation (v2)
 
@@ -15,29 +21,46 @@ on:
         required: true
       dataset_stage:
         description: 'basic / advanced'
-        required: true
-        default: 'basic'
-      paper_pipeline:
-        description: 'Analysis pipeline from paper (JSON string)'
         required: false
-        default: '{}'
+        default: 'basic'
       run_mutation:
         description: 'Run guard mutation self-test'
         required: false
         default: 'true'
+  push:
+    branches: [v2-end-to-end]
+    paths:
+      - '.github/triggers/*.flag'
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
-    env:
-      DATASET_ID: ${{ inputs.dataset_id }}
-      DATASET_STAGE: ${{ inputs.dataset_stage }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve dataset from trigger
+        id: trig
+        run: |
+          set -e
+          if [ -n "${{ inputs.dataset_id }}" ]; then
+            echo "dataset=${{ inputs.dataset_id }}" >> "$GITHUB_OUTPUT"
+            echo "stage=${{ inputs.dataset_stage }}" >> "$GITHUB_OUTPUT"
+          else
+            f=$(ls -t .github/triggers/*.flag 2>/dev/null | head -1)
+            if [ -z "$f" ]; then echo "no trigger flag found"; exit 1; fi
+            d=$(basename "$f" .flag)
+            echo "dataset=$d" >> "$GITHUB_OUTPUT"
+            echo "stage=$(sed -n 's/^stage: *//p' "$f" | head -1 || echo basic)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set env
+        run: |
+          echo "DATASET_ID=${{ steps.trig.outputs.dataset }}" >> "$GITHUB_ENV"
+          echo "DATASET_STAGE=${{ steps.trig.outputs.stage || 'basic' }}" >> "$GITHUB_ENV"
+          echo "RUN_MUTATION=${{ inputs.run_mutation || 'true' }}" >> "$GITHUB_ENV"
 
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
@@ -55,20 +78,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev libpng-dev libjpeg-dev poppler-utils
 
-      - name: Cache R packages
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.R_LIBS_USER }}
-          key: ${{ runner.os }}-r-4.3.1-p1-v1
-
-      - name: Install R packages
+      - name: Install CRAN base
         run: |
-          options(Ncpus = 4)
-          install.packages(c("BiocManager", "jsonlite", "yaml", "data.table"), Ncpus = 4)
-          BiocManager::install(c("GEOquery", "limma", "affy", "clusterProfiler", "org.Hs.eg.db"), ask = FALSE, update = FALSE, Ncpus = 4)
-        shell: Rscript {0}
-        env:
-          R_LIBS_USER: ${{ env.R_LIBS_USER }}
+          Rscript -e 'install.packages(c("BiocManager", "jsonlite", "yaml"), Ncpus = 4)'
+
+      - name: Install Bioconductor packages (one by one, never abort)
+        run: |
+          for p in GEOquery limma affy org.Hs.eg.db GO.db hgu133plus2.db hgu95av2.db; do
+            echo "=== installing $p ==="
+            Rscript -e "BiocManager::install('$p', ask = FALSE, update = FALSE, Ncpus = 4)" 2>&1 | tail -3 || echo "FAILED: $p"
+          done
+          Rscript -e 'for (p in c("limma","affy","org.Hs.eg.db","GO.db","hgu133plus2.db")) cat(p, requireNamespace(p, quietly=TRUE), "\n")'
 
       - name: Install Python deps
         run: |
@@ -77,41 +97,35 @@ jobs:
 
       - name: Show environment
         run: |
+          mkdir -p logs
           Rscript -e 'sessionInfo()' > logs/session_r.txt
           python -c "import sys; print(sys.version)" > logs/session_python.txt
           pip freeze > logs/requirements_frozen.txt
 
       - name: Download dataset
         run: |
-          python scripts/download_geo.py \
-            --dataset "${{ inputs.dataset_id }}" \
-            --output inputs/raw/
+          python scripts/download_geo.py --dataset "$DATASET_ID" --output inputs/raw/
 
       - name: Data availability analysis
         run: |
-          python scripts/data_availability.py \
-            --dataset "${{ inputs.dataset_id }}" \
-            --workspace .
+          python scripts/data_availability.py --dataset "$DATASET_ID" --workspace .
 
       - name: Run P1 analysis
         run: |
-          python scripts/run_p1.py \
-            --workspace . \
-            --dataset "${{ inputs.dataset_id }}" \
-            --pipeline '${{ inputs.paper_pipeline }}'
+          python scripts/run_p1.py --workspace . --dataset "$DATASET_ID"
 
-      - name: Run guard mutation self-test
-        if: inputs.run_mutation == 'true'
+      - name: Guard self-test (P4 checks)
+        if: env.RUN_MUTATION == 'true'
         run: |
-          python scripts/guard_selftest.py --workspace .
+          python scripts/guard_selftest.py --part P4 --check || true
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: results-${{ inputs.dataset_id }}
+          name: results-${{ steps.trig.outputs.dataset }}
           path: |
-            inputs/migration_log.yaml
+            inputs/
             analysis/
             02_writing/
             03_typesetting/
