@@ -273,11 +273,15 @@ def find_matrix_file(workspace: str, dataset: str) -> str | None:
     root = os.path.join(workspace, "inputs", "raw", dataset)
     if not os.path.isdir(root):
         return None
+    # GEO 的 suppl 常为 .txt.gz / .csv.gz（单文件 gzip），R 的 read.delim 能直接读 .gz
+    exts = (".txt", ".csv", ".tsv", ".txt.gz", ".csv.gz", ".tsv.gz", ".tab", ".tab.gz")
     cands = []
+    seen = []
     for r, _, files in os.walk(root):
         for fn in files:
             low = fn.lower()
-            if not low.endswith((".txt", ".csv", ".tsv")):
+            seen.append(os.path.relpath(os.path.join(r, fn), root))
+            if not low.endswith(exts):
                 continue
             if "meta" in low or "readme" in low:
                 continue
@@ -293,10 +297,11 @@ def find_matrix_file(workspace: str, dataset: str) -> str | None:
                 size = 0
             cands.append((score, size, p))
     if not cands:
+        print(f"[{dataset}] 未找到矩阵文件。目录内文件（前 20）：{seen[:20]}")
         return None
     cands.sort(key=lambda t: (t[0], t[1]), reverse=True)
     rel = os.path.relpath(cands[0][2], workspace)
-    print(f"[{dataset}] 选中矩阵文件：{rel}")
+    print(f"[{dataset}] 候选 {len(cands)} 个，选中矩阵文件：{rel}")
     return rel.replace("\\", "/")
 
 
