@@ -1,10 +1,17 @@
 # 云端环境探测：确认 R / Bioconductor 依赖可安装（阶段 2 前置风险验证）
-# 触发：gh workflow run env_probe.yml --ref v2-end-to-end
+#
+# 触发方式：本文件本身发生变更并推送到 v2-end-to-end 分支时自动运行。
+# 说明：GitHub 的 workflow_dispatch 只认默认分支上的 workflow 文件，本仓库默认分支为
+#       第一版的 main。为不改动默认分支、不污染第一版，第二版一律用 push-paths 触发。
 
 name: Env Probe (R/Bioconductor)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [v2-end-to-end]
+    paths:
+      - '.github/workflows/env_probe.yml'
 
 jobs:
   probe:
