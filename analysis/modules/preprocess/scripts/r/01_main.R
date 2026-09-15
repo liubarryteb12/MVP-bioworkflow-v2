@@ -77,8 +77,13 @@ normalize_quantiles <- function(x) {
 summarize_medianpolish <- function(pm_mat, probeset_index) {
   out <- matrix(NA_real_, length(probeset_index), ncol(pm_mat))
   for (i in seq_along(probeset_index)) {
-    fit <- stats::medpolish(pm_mat[probeset_index[[i]], , drop = FALSE], trace.iter = FALSE, na.rm = TRUE)
-    out[i, ] <- fit$overall + fit$col
+    sub <- pm_mat[probeset_index[[i]], , drop = FALSE]
+    fit <- try(stats::medpolish(sub, trace.iter = FALSE, na.rm = TRUE), silent = TRUE)
+    if (inherits(fit, "try-error") || length(fit$col) != ncol(sub)) {
+      out[i, ] <- suppressWarnings(apply(sub, 2, median, na.rm = TRUE))
+    } else {
+      out[i, ] <- fit$overall + fit$col
+    }
   }
   rownames(out) <- names(probeset_index)
   colnames(out) <- colnames(pm_mat)
@@ -92,10 +97,13 @@ if (inherits(res, "try-error")) {
   cat("affy::rma failed: ", msg, "\n", sep = "")
   cat("fallback -> manual RMA (log2(PM) + quantile normalize + medianpolish)\n")
   rma_method <- "manual: log2(PM) + quantile normalize + medianpolish (affy::rma unavailable)"
-  pm_mat <- log2(Biobase::pm(ab))
+  # PM 强度可能为 0，log2(0) = -Inf 会让后续 median polish 直接崩；下限截断到 1。
+  pm_mat <- log2(pmax(Biobase::pm(ab), 1))
+  pm_mat[!is.finite(pm_mat)] <- NA
   pm_mat <- normalize_quantiles(pm_mat)
   pn <- affy::probeNames(ab, "pm")
   expr <- summarize_medianpolish(pm_mat, split(seq_along(pn), pn))
+  expr[!is.finite(expr)] <- NA
 } else {
   expr <- Biobase::exprs(res)
 }
