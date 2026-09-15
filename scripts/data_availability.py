@@ -116,12 +116,16 @@ def detect_data_type(meta: dict, raw_dir: str) -> str:
 
 
 def count_raw_files(raw_dir: str, patterns: tuple) -> int:
+    """统计原始文件数。GEO 的 CEL 常为 .CEL.gz，需先去 .gz 再判扩展名。"""
     if not os.path.isdir(raw_dir):
         return 0
     n = 0
     for root, _, files in os.walk(raw_dir):
         for fn in files:
-            if fn.lower().endswith(patterns):
+            name = fn.lower()
+            if name.endswith(".gz"):
+                name = name[:-3]
+            if name.endswith(patterns):
                 n += 1
     return n
 

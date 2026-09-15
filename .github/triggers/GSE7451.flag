@@ -1,7 +1,7 @@
 dataset: GSE7451
 stage: basic
-requested_at: 2026-09-15T16:55:00+08:00
+requested_at: 2026-09-15T17:05:00+08:00
 requested_by: agent
-rerun: 2
-rerun_reason: 首次运行 Download dataset 失败（脚本默认走本地代理，云端需直连），已加 --no-proxy
+rerun: 3
+rerun_reason: preprocess 在绘图处失败（figures 目录未预先创建，pdf() cannot open file）；同时修 CEL.gz 计数误报
 paper: Hu S, et al. Arthritis Rheum. 2007.

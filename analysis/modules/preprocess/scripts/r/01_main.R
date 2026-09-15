@@ -31,6 +31,9 @@ get_par <- function(nm, default = NULL) {
   if (!is.null(cfg$parameters[[nm]])) cfg$parameters[[nm]] else default
 }
 
+# 先建齐所有输出目录：pdf() 不会自动建目录，缺目录会直接报 cannot open file
+for (o in cfg$outputs$path) dir.create(dirname(o), recursive = TRUE, showWarnings = FALSE)
+
 cel_dir <- get_in("cel_dir")
 thr <- as.numeric(get_par("absent_fraction_threshold", 0.75))
 cat("cel_dir: ", cel_dir, "\nthreshold: ", thr, "\n", sep = "")

@@ -228,6 +228,17 @@ def build_input_json(path: str, run_id: str, module_id: str, inputs: list, outpu
 def run_module(workspace: str, module_id: str, script: str, input_json: str, language: str = "R") -> int:
     abs_script = os.path.join(workspace, script)
     abs_json = os.path.join(workspace, input_json)
+
+    # 执行前先建齐输出目录：R 的 pdf() 不会自动建目录，缺目录会直接 cannot open file
+    try:
+        with open(abs_json, encoding="utf-8") as f:
+            doc = json.load(f)
+        for o in doc.get("outputs", []) or []:
+            d = os.path.dirname(os.path.join(workspace, str(o.get("path", ""))))
+            if d:
+                os.makedirs(d, exist_ok=True)
+    except Exception as exc:
+        print(f"  [warn] 预建输出目录失败：{exc}")
     cmd = ["Rscript", abs_script, abs_json] if language == "R" else [sys.executable, abs_script, abs_json]
     print(f"  $ {' '.join(cmd)}")
     proc = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True)

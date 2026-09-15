@@ -29,6 +29,9 @@ padj_thr <- as.numeric(get_par("padj_threshold", 0.05))
 lfc_thr <- as.numeric(get_par("log2fc_threshold", 1.0))
 adjust_method <- as.character(get_par("adjust_method", "BH"))
 
+# 先建齐所有输出目录（pdf() 不会自动建目录）
+for (o in cfg$outputs$path) dir.create(dirname(o), recursive = TRUE, showWarnings = FALSE)
+
 # ---------- Step 1: 对齐 ----------
 expr <- read.csv(get_in("expr_filtered"), check.names = FALSE, row.names = 1)
 ss <- read.csv(get_in("sample_sheet"), stringsAsFactors = FALSE)
