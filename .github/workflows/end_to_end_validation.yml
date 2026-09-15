@@ -121,8 +121,15 @@ jobs:
         run: |
           ulimit -s unlimited 2>/dev/null || ulimit -s 65536 2>/dev/null || echo "cannot raise stack limit"
           echo "stack limit: $(ulimit -s)"
-          nproc
-          python scripts/run_p1.py --workspace . --dataset "$DATASET_ID"
+          echo "cpus: $(nproc)"
+          # preprocessCore 按可用 CPU 数创建 pthread，在 runner 上会 EINVAL。
+          # 绑定到单个 CPU，让它检测到的核数为 1，避免创建额外线程。
+          if command -v taskset >/dev/null 2>&1; then
+            echo "pinned to CPU 0"
+            taskset -c 0 python scripts/run_p1.py --workspace . --dataset "$DATASET_ID"
+          else
+            python scripts/run_p1.py --workspace . --dataset "$DATASET_ID"
+          fi
 
       - name: Guard self-test (P4 checks)
         if: env.RUN_MUTATION == 'true'

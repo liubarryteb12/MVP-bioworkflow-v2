@@ -1,7 +1,7 @@
 dataset: GSE7451
 stage: basic
-requested_at: 2026-09-15T17:25:00+08:00
+requested_at: 2026-09-15T17:32:00+08:00
 requested_by: agent
-rerun: 5
-rerun_reason: 放宽栈限制(ulimit -s)+线程数前移到加载包前；并为 rma/mas5calls 增加等价回退，保证流程不中断
+rerun: 6
+rerun_reason: taskset 绑定单 CPU，让 preprocessCore 检测核数=1 从而不创建 pthread
 paper: Hu S, et al. Arthritis Rheum. 2007.
