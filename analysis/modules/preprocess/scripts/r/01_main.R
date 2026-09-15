@@ -100,11 +100,17 @@ if (inherits(res, "try-error")) {
   cat("affy::rma failed: ", msg, "\n", sep = "")
   cat("fallback -> manual RMA (log2(PM) + quantile normalize + medianpolish)\n")
   rma_method <- "manual: log2(PM) + quantile normalize + medianpolish (affy::rma unavailable)"
-  # PM 强度可能为 0，log2(0) = -Inf 会让后续 median polish 直接崩；下限截断到 1。
+  # PM 强度可能为 0，log2(0) = -Inf 会让后续汇总直接崩；下限截断到 1。
+  cat("  fallback: extracting PM matrix\n"); flush.console()
   pm_mat <- log2(pmax(Biobase::pm(ab), 1))
   pm_mat[!is.finite(pm_mat)] <- NA
-  pm_mat <- normalize_quantiles(pm_mat)
   pn <- affy::probeNames(ab, "pm")
+  cat("  PM matrix dim: ", nrow(pm_mat), " x ", ncol(pm_mat), "\n", sep = ""); flush.console()
+  # AffyBatch 同时持有 PM 与 MM 且带 CEL 缓存，内存占用大；手工路径不再需要它，立即释放。
+  rm(ab); gc()
+  cat("  memory freed; normalizing quantiles\n"); flush.console()
+  pm_mat <- normalize_quantiles(pm_mat)
+  cat("  quantile normalization done\n"); flush.console()
   expr <- summarize_medianpolish(pm_mat, split(seq_along(pn), pn))
   expr[!is.finite(expr)] <- NA
 } else {

@@ -85,12 +85,12 @@ rules:
 execution:
   backend: github_actions
   github_actions:
-    repo: liubarryteb12/shengxinceshi-arena      # 第二版专用仓库，与第一版(mvp-bioframework-test)隔离
-    branch: v2-end-to-end
+    repo: liubarryteb12/MVP-bioworkflow-version2  # 第二版独立仓库，整个仓库即第二版
+    branch: main
     workflow: end_to_end_validation.yml
     enabled: true
     timeout_minutes: 360
-    dispatch_available: true                      # 该仓库默认分支即 v2-end-to-end，可用 workflow_dispatch
+    dispatch_available: true                      # 主分支即第二版，workflow_dispatch 可直接用
 
 datasets:
   basic:

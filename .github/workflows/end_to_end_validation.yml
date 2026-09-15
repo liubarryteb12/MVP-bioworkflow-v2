@@ -122,6 +122,8 @@ jobs:
           ulimit -s unlimited 2>/dev/null || ulimit -s 65536 2>/dev/null || echo "cannot raise stack limit"
           echo "stack limit: $(ulimit -s)"
           echo "cpus: $(nproc)"
+          free -h || true
+          cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || true
           # preprocessCore 按可用 CPU 数创建 pthread，在 runner 上会 EINVAL。
           # 绑定到单个 CPU，让它检测到的核数为 1，避免创建额外线程。
           if command -v taskset >/dev/null 2>&1; then
