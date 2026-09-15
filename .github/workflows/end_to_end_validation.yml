@@ -53,7 +53,7 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev libpng-dev libjpeg-dev
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev libpng-dev libjpeg-dev poppler-utils
 
       - name: Cache R packages
         uses: actions/cache@v4
