@@ -102,7 +102,8 @@ if (inherits(res, "try-error")) {
   rma_method <- "manual: log2(PM) + quantile normalize + medianpolish (affy::rma unavailable)"
   # PM 强度可能为 0，log2(0) = -Inf 会让后续汇总直接崩；下限截断到 1。
   cat("  fallback: extracting PM matrix\n"); flush.console()
-  pm_mat <- log2(pmax(Biobase::pm(ab), 1))
+  # 注意：pm() 来自 affy，不是 Biobase（Biobase::pm 不存在，会直接报错）
+  pm_mat <- log2(pmax(affy::pm(ab), 1))
   pm_mat[!is.finite(pm_mat)] <- NA
   pn <- affy::probeNames(ab, "pm")
   cat("  PM matrix dim: ", nrow(pm_mat), " x ", ncol(pm_mat), "\n", sep = ""); flush.console()
