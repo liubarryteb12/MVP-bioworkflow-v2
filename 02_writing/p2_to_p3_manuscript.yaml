@@ -1,0 +1,48 @@
+project_id: project_v2_e2e_gse174263
+timestamp: 2026-09-16T11:55:02+0800
+manuscript_version: v1-outline
+structure:
+  order: S1
+  sections:
+  - title_page
+  - abstract
+  - keywords
+  - introduction
+  - materials_and_methods
+  - results
+  - discussion
+  - declarations
+  - references
+files:
+  manuscript: 02_writing/p2_outline.md
+  refs: 02_writing/refs/refs.bib
+  figures_dir: analysis/outputs/GSE174263/rnaseq_de/figures/
+  tables_dir: analysis/outputs/GSE174263/rnaseq_de/results/
+figures:
+- figure_id: fig1
+  file: analysis/outputs/GSE174263/rnaseq_de/figures/qc_libsize.pdf
+  caption: '[占位]'
+  position_hint: results
+- figure_id: fig2
+  file: analysis/outputs/GSE174263/rnaseq_de/figures/qc_correlation.pdf
+  caption: '[占位]'
+  position_hint: results
+- figure_id: fig3
+  file: analysis/outputs/GSE174263/rnaseq_de/figures/qc_pca.pdf
+  caption: '[占位]'
+  position_hint: results
+tables: []
+references:
+  style: vancouver
+  count: 0
+declarations:
+  ethics: Not applicable.
+  consent: Not applicable.
+  data_availability: All data are available at GEO (GSE174263).
+  code_availability: Analysis scripts are version-controlled in the project repository.
+  competing_interests: The authors declare no conflict of interest.
+  funding: Not applicable.
+  authors_contributions: 'CRediT: to be completed by user.'
+  ai_declaration: During preparation, an AI agent executed the analysis pipeline;
+    all outputs are reproducible from recorded scripts.
+output_level: L1

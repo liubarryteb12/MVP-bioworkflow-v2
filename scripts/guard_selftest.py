@@ -37,7 +37,9 @@ def _fixture_for(part: str, dataset: str) -> dict:
     if part == "P4":
         return fixtures_p4.FIXTURE
     if part == "P1":
-        return checks_p1._fig_fixture(dataset or "GSE7451")
+        # P1 的变异用例与内置 fixture 均按 GSE7451 构造（mutate 硬编码该键名），
+        # 与 dataset 无关——变异测试验证的是判据逻辑，不是数据。
+        return checks_p1._fig_fixture("GSE7451")
     return {}
 
 
@@ -106,7 +108,14 @@ def main() -> int:
     if args.check:
         return 0 if all(f.status != "fail" for f in findings) else 1
 
-    results = mutation.run_part_mutations(args.part, fixture, meta={"dataset": dataset})
+    # 变异测试验证的是"判据能否抓到违规"，与具体数据无关：固定用内置 fixture，
+    # 真实模式的判据检查（--check / 上面的 findings）才反映工作空间实际状态。
+    mut_fixture = fixture if args.fixture else (_fixture_for(args.part, dataset) or fixture)
+    # 变异测试必须在 fixture 自身的数据集锚上跑：P1 fixture/mutate 均按 GSE7451 构造，
+    # 若传真实 dataset（如 GSE174263），判据会绕过 fixture 去读真实文件，注入将不可见。
+    mut_ds = "GSE7451" if args.part == "P1" else dataset
+    results = mutation.run_part_mutations(args.part, mut_fixture, meta={"dataset": mut_ds})
+    results["fixture_mode"] = bool(args.fixture or mut_fixture is not fixture)
     out = args.out or os.path.join(args.workspace, OUT_PATHS[args.part])
     mutation.write_results(results, out)
 
@@ -115,7 +124,8 @@ def main() -> int:
         if c["verdict"] != "PASS":
             print(
                 f"  {c['verdict']}  {c['case_id']} ({c['check_id']})  "
-                f"基线={c['baseline_status']} 注入后={c['after_status']} 恢复后={c['restored_status']}"
+                f"基线={c.get('baseline_status', '-')} 注入后={c.get('after_status', '-')} "
+                f"恢复后={c.get('restored_status', '-')}  {c.get('message', '')}"
             )
     print(f"[{args.part}] 结果写入：{out}")
 

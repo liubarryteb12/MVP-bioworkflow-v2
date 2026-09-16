@@ -212,5 +212,6 @@
       "verdict": "PASS",
       "message": "P1 未读取 P4-a 输出"
     }
-  ]
+  ],
+  "fixture_mode": true
 }

@@ -82,5 +82,6 @@
       "verdict": "PASS",
       "message": "第 [0] 项未成功"
     }
-  ]
+  ],
+  "fixture_mode": true
 }

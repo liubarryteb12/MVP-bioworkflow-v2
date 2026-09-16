@@ -232,6 +232,8 @@ def _qc8(ctx: Context) -> Finding:
         if m.get("status") == "failed":
             return Finding("P1.QC8.output_completeness", FAIL, f"manifest:{m.get('module_id')}.status", "模块失败")
         for o in m.get("outputs", []) or []:
+            if o.get("conditional"):
+                continue  # 条件性输出（如 T21 门控下的 volcano）：未生成不算缺失，但须在 manifest 标注
             if o.get("is_final") and not os.path.exists(os.path.join(ctx.workspace, str(o.get("path", "")))):
                 return Finding("P1.QC8.output_completeness", FAIL, f"manifest:{m.get('module_id')}.outputs",
                                f"缺输出 {o.get('path')}")

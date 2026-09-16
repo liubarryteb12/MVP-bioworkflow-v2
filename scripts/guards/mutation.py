@@ -71,9 +71,19 @@ def run_part_mutations(part: str, fixture: Dict[str, Any], meta: Dict[str, Any] 
         base_ctx = _ctx_from_fixture(fixture, meta)
         baseline: Finding = run_check(base_ctx, mc.check_id)
 
-        # 2) 注入
+        # 2) 注入（真实文件模式下某些 fixture 键可能缺失：变异用例自身出错也要如实记录，不崩进程）
         mutated = copy.deepcopy(fixture)
-        mc.mutate(mutated)
+        try:
+            mc.mutate(mutated)
+        except Exception as exc:
+            results["cases"].append(
+                {
+                    "case_id": mc.case_id, "check_id": mc.check_id, "anchor": mc.anchor,
+                    "injected": mc.injected, "expect_fail": mc.expect_fail, "caught": False,
+                    "verdict": "变异用例自身错误", "message": f"mutate 失败：{exc}",
+                }
+            )
+            continue
         mut_ctx = Context(workspace=".")
         mut_ctx.docs = mutated
         mut_ctx.meta.update(meta or {})

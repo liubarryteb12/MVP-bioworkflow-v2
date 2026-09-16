@@ -542,6 +542,23 @@ def main() -> int:
         run_state["steps"].append({"module_id": "differential_expression", "status": "blocked", "reason": reason})
         run_state["steps"].append({"module_id": "pathway_enrichment", "status": "blocked", "reason": reason})
     else:
+        # 微阵列仅支持 Affymetrix CEL。Agilent/Illumina 表达矩阵需 limma::read.maimages 流程（待扩展，登记）。
+        n_cel = (da.get("inputs", {}) or {}).get("n_cel_files", 0) or 0
+        if not n_cel:
+            platform_id = (da.get("inputs", {}) or {}).get("platform_id", "?")
+            reason = (f"平台 {platform_id} 未提供 Affymetrix CEL 文件（Agilent/Illumina 表达矩阵），"
+                      f"当前 P1 预装流程仅支持 Affy CEL；limma::read.maimages 流程登记为待扩展，"
+                      f"不硬跑、不伪造结果")
+            print(f"[{acc}] {reason}")
+            run_state["steps"].append({"module_id": "preprocess", "status": "blocked",
+                                       "reason": reason, "platform": platform_id})
+            run_state["status"] = "completed"
+            dump_yaml(os.path.join(ws, "analysis", "_runs", run_id, "run.yaml"), run_state)
+            dump_yaml(os.path.join(out_root, "records", "qc_report.yaml"),
+                      {"dataset": acc, "run_id": run_id, "timestamp": ts, "checks": [
+                          {"name": "platform_support", "status": "failed",
+                           "message": reason}]})
+            return 0
         # ---- Step 1: preprocess ----
         seq += 1
         mod = "preprocess"

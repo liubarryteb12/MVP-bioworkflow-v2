@@ -542,8 +542,14 @@ for _i, (_cid, _key, _desc) in enumerate(
             for i, it in enumerate(items):
                 v = it.get(_key)
                 if _key == "source_verified":
-                    if v is not True:
-                        return Finding(_cid, FAIL, f"{RJ}:recommended[{i}].{_key}", "未标记来源已验证")
+                    if v is True:
+                        continue  # 已核实
+                    # 元原则 5：不确定时标"待确认"，不得猜。允许显式登记待核实（pending/source_note），
+                    # 两条路都满足可追溯性；既未核实又未登记才是违规。
+                    if it.get("pending") or str(it.get("source_note", "")).strip():
+                        continue
+                    return Finding(_cid, FAIL, f"{RJ}:recommended[{i}].{_key}",
+                                   "未核实来源且无待核实登记（不得凭记忆填期刊数据）")
                 elif _key == "risks":
                     if not isinstance(v, list):
                         return Finding(_cid, FAIL, f"{RJ}:recommended[{i}].{_key}", "risks 必须是列表（可为空）")
@@ -693,7 +699,9 @@ for _cid, _src, _desc in [
             if not _present(doc):
                 return Finding(_cid, NA, QA, "质量评估不存在")
             srcs = get_in(doc, "sources", []) or []
-            if _src not in srcs:
+            # 多数据集运行时接口文件带 _ACC 后缀，按逻辑名匹配
+            key = _src.split("/")[-1].split(".")[0]
+            if not any(key in str(s) for s in srcs):
                 return Finding(_cid, FAIL, f"{QA}:sources", f"未读取 {_src}")
             return Finding(_cid, PASS, f"{QA}:sources", _desc + "：通过")
 

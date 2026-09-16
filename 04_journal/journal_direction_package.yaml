@@ -1,89 +1,73 @@
-# P4-a 期刊方向包 —— GSE7451（基础集 priority 1）
+# P4-a 期刊方向包 —— GSE174263（基础验证集 priority 1，替换原 GSE7451）
 # 纪律：题材初判依据必须来自权威源快照，不得凭记忆（P4 纲要 §1.4 / §7.3）
 
-package_id: jdp_gse7451_20260915
-timestamp: 2026-09-15T15:30:00+08:00
+package_id: jdp_gse174263_20260916
+timestamp: 2026-09-16T00:00:00+08:00
 stage: P4-a
 status: confirmed
 confirmed_by: auto_e2e
-confirmation_note: 端到端验证模式下由 agent 代确认（工作安排提示词 §2.2「模拟用户选择」）；真实投稿前必须由用户确认
+confirmation_note: 端到端验证模式下由 agent 代确认；真实投稿前必须由用户确认
 
-# ========== 输入与溯源 ==========
 inputs:
-  dataset_id: GSE7451
-  geo_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE7451&targ=self&form=text&view=brief
-  snapshot: 04_journal/snapshots/geo_meta/GSE7451_meta.yaml
-  fetched_at: 2026-09-16T00:20:35+0800
-  pubmed_id: "17968930"
-  paper_reference: Hu S, et al. Salivary Proteomic and Genomic Biomarkers for Primary Sjögren's Syndrome. Arthritis Rheum. 2007.
+  dataset_id: GSE174263
+  geo_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE174263&targ=self&form=text&view=brief
+  snapshot: 04_journal/snapshots/geo_meta/GSE174263_meta.yaml
+  fetched_at: 2026-09-16T00:00:00+08:00
+  pubmed_id: "34982772"
+  paper_reference: Orsi GA, et al. PMID 34982772
+  deviation_from_input_material: []
 
-# ========== 题材初判 ==========
 topic_judgment:
-  primary_topic: 原发性干燥综合征唾液转录组差异表达与生物标志物发现
-  secondary_topic: 唾液外分泌腺自身免疫 / 无创体液活检
-  study_type: 病例-对照微阵列表达谱差异分析（生信分析，无实验验证）
+  primary_topic: 果蝇卵巢转录组对生殖系 Snr1 / mod(mdg4) 敲低的响应
+  secondary_topic: 染质重塑与生殖细胞基因表达
+  study_type: RNA-seq 计数矩阵差异表达（生信，无实验验证）
   novelty_level: medium
-  data_type: transcriptomics
-  sample_size: 20
-  group_balance: 10 vs 10（平衡）
+  data_type: rna_seq
+  sample_size: 4
+  group_balance: 2 KD vs 2 WT（每组 n=2 < 6，T21 必 FAIL）
 
-# ========== 期刊方向 ==========
 journal_direction:
   candidate_directions:
-    - 风湿免疫与自身免疫病
-    - 口腔医学与唾液诊断
-    - 生物标志物与转化医学
-  target_tier: Q2-Q3
+    - 果蝇遗传学与发育生物学
+    - 染色质生物学
+  target_tier: 不建议投稿（样本量不足）
   likely_publishers:
     - BMC
-    - Elsevier
-    - MDPI
+    - Genetics Society of America
   excluded:
-    - direction: Nature 系
-      reason: 样本量小（10 vs 10）、无独立验证队列、无功能实验，达不到机制/转化层级
-    - direction: Cell 系
-      reason: 缺少实验验证与机制研究
-    - direction: 方法学期刊
-      reason: 本研究沿用 RMA + limma + MAPPFinder 既定流程，无方法学增量
+    - direction: Nature 系 / Cell 系
+      reason: 每组 n=2，无统计效力，无机制实验
+    - direction: 任何需统计推断的原创研究期刊
+      reason: T21 必 FAIL，只能做描述性分析
 
-# ========== 分析要求（约束 P1） ==========
 analysis_requirements:
   required_modules:
     - data_download
-    - quality_control
-    - rma_normalization
-    - probe_filtering
-    - differential_expression_limma
-    - pathway_enrichment
+    - count_matrix_merge
+    - rnaseq_qc
   optional_modules:
-    - pca
-    - heatmap
-    - external_validation
+    - deseq2_differential_expression   # 仅当每组 n>=6 才允许
+    - pathway_enrichment               # 仅当 DESeq2 产出显著基因才允许
   minimum_evidence:
-    - 至少一个主图（火山图或热图）
-    - 一个差异基因表（含 log2FC 与 FDR）
-    - 一个通路富集结果
+    - 计数矩阵 QC（library size / 检出基因 / 样本相关 / PCA）
+    - T21 判据明确判定（预期 FAIL）
   data_requirements:
-    - 原始 CEL 文件齐全（20 个）
-    - 每组样本量 ≥ 6（实测 10 vs 10，满足）
-    - GPL570 平台注释可获取
+    - 每组样本量 ≥ 6（实测 n=2/组，不满足）
 
-# ========== 写作约束（约束 P2） ==========
 writing_constraints:
   structure: S1
   abstract_type: structured
   abstract_limit: 350
   keywords_count: 3-10
   reference_style: Vancouver
-  reference_limit: 60
-  figure_limit: 8
-  table_limit: 4
+  reference_limit: 40
+  figure_limit: 4
+  table_limit: 2
   language: English
-  audience: 生信 / 临床交叉
+  audience: 果蝇遗传学 / 染色质生物学
   story_type: data-driven
-  evidence_boundary: 候选
+  evidence_boundary: 探索性
 
-# ========== 排版约束（约束 P3） ==========
 typesetting_constraints:
   publisher_system: BMC
   template: 官方模板或通用安全格式
@@ -93,22 +77,17 @@ typesetting_constraints:
   figure_width_double: 170
   figure_format: five
 
-# ========== 风险与不确定性 ==========
 risks:
-  - 样本量偏小（10 vs 10），统计效力有限，结论只能到"候选"
-  - 数据集为 2007 年老数据，创新性受限
-  - 无独立验证队列，外推性不足
-  - 无实验验证，不得写机制性主张
+  - 每组 n=2 < 6，统计推断不成立，T21 必 FAIL
+  - 只能做描述性 QC，不得产出差异基因或富集结论
+  - 果蝇物种，富集需 org.Dm.eg.db（当前云端未装，登记待扩展）
 
 uncertainties:
-  - 是否有外部验证数据集可用
-  - 是否有临床随访信息（决定能否做生存分析）
-  - 用户是否有偏好的目标期刊
+  - 用户是否会补充样本至每组 n≥6
+  - 是否换用样本量更大的同方向数据集
 
-# ========== 待定制项 ==========
 pending_items:
+  - 是否补样本
   - 目标期刊
-  - 故事线偏好
   - 证据边界
-  - 图数上限
   - 篇幅与截止
