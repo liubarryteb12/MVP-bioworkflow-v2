@@ -1,5 +1,5 @@
 registry_version: '1.1'
-updated_at: 2026-09-16T11:55:02+0800
+updated_at: 2026-09-16T12:17:35+0800
 owner: P2
 dormant:
 - id: B1
@@ -29,5 +29,5 @@ dormant:
 activation_log:
 - id: B9
   rule: 数据可用性登录号
-  activated_at: 2026-09-16T11:55:02+0800
+  activated_at: 2026-09-16T12:17:35+0800
   evidence: GEO GSE174263 登录号已写入 p2_to_p3_manuscript.declarations.data_availability

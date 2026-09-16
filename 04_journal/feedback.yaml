@@ -1,4 +1,4 @@
-timestamp: 2026-09-16T11:55:02+0800
+timestamp: 2026-09-16T12:17:35+0800
 feedback:
 - target: P1
   reason: T21 fail：每组样本量 < 6，统计推断被门控

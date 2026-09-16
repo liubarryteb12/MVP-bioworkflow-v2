@@ -145,14 +145,15 @@ def run_p2(ws: str) -> dict:
                     for i, f in enumerate(ev.get("figures", []) or [])],
         "tables": [], "references": {"style": "vancouver", "count": 0},
         "declarations": {
-            "ethics": "Not applicable.",
-            "consent": "Not applicable.",
-            "data_availability": f"All data are available at GEO ({ACC}).",
-            "code_availability": "Analysis scripts are version-controlled in the project repository.",
-            "competing_interests": "The authors declare no conflict of interest.",
-            "funding": "Not applicable.",
-            "authors_contributions": "CRediT: to be completed by user.",
-            "ai_declaration": "During preparation, an AI agent executed the analysis pipeline; all outputs are reproducible from recorded scripts.",
+            # 句式逐字校准自范例文献 s10142-025-01598-x（BMC 系），见 5-P2写作/体裁参考库/对P2P3的校准.md
+            "ethics": "Ethics approval and consent to participate: Not applicable.",
+            "consent": "Consent for publication: Not applicable.",
+            "data_availability": f"Availability of data and materials: The datasets analysed during the current study are available in the GEO repository, {ACC} (http://www.ncbi.nlm.nih.gov/geo/).",
+            "code_availability": "Code availability: The analysis scripts and machine-readable run manifests are available in the project repository.",
+            "competing_interests": "Competing interests: The authors declare no competing interests.",
+            "funding": "Funding: Not applicable.",
+            "authors_contributions": "Authors' contributions: to be completed by user (CRediT taxonomy).",
+            "ai_declaration": "Declaration of generative AI and AI-assisted technologies in the writing process: During the preparation of this work the authors used an AI agent (GLM, executed via GitHub Actions) to perform the bioinformatic analysis and manuscript assembly. All analysis steps are recorded as machine-readable manifests and mutation-test logs; the authors reviewed and edited the content as needed and take full responsibility for the content of the published article.",
         },
         "output_level": level,
     })

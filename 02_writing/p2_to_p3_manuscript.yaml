@@ -1,5 +1,5 @@
 project_id: project_v2_e2e_gse174263
-timestamp: 2026-09-16T11:55:02+0800
+timestamp: 2026-09-16T12:17:35+0800
 manuscript_version: v1-outline
 structure:
   order: S1
@@ -36,13 +36,20 @@ references:
   style: vancouver
   count: 0
 declarations:
-  ethics: Not applicable.
-  consent: Not applicable.
-  data_availability: All data are available at GEO (GSE174263).
-  code_availability: Analysis scripts are version-controlled in the project repository.
-  competing_interests: The authors declare no conflict of interest.
-  funding: Not applicable.
-  authors_contributions: 'CRediT: to be completed by user.'
-  ai_declaration: During preparation, an AI agent executed the analysis pipeline;
-    all outputs are reproducible from recorded scripts.
+  ethics: 'Ethics approval and consent to participate: Not applicable.'
+  consent: 'Consent for publication: Not applicable.'
+  data_availability: 'Availability of data and materials: The datasets analysed during
+    the current study are available in the GEO repository, GSE174263 (http://www.ncbi.nlm.nih.gov/geo/).'
+  code_availability: 'Code availability: The analysis scripts and machine-readable
+    run manifests are available in the project repository.'
+  competing_interests: 'Competing interests: The authors declare no competing interests.'
+  funding: 'Funding: Not applicable.'
+  authors_contributions: 'Authors'' contributions: to be completed by user (CRediT
+    taxonomy).'
+  ai_declaration: 'Declaration of generative AI and AI-assisted technologies in the
+    writing process: During the preparation of this work the authors used an AI agent
+    (GLM, executed via GitHub Actions) to perform the bioinformatic analysis and manuscript
+    assembly. All analysis steps are recorded as machine-readable manifests and mutation-test
+    logs; the authors reviewed and edited the content as needed and take full responsibility
+    for the content of the published article.'
 output_level: L1

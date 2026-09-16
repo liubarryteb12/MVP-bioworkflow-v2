@@ -1,6 +1,6 @@
 journal_id: bmc_genomics
 name: BMC Genomics
-timestamp: 2026-09-16T11:55:02+0800
+timestamp: 2026-09-16T12:17:35+0800
 checks:
 - name: not_in_beall_list
   status: passed
