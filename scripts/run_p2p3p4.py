@@ -129,6 +129,10 @@ def run_p2(ws: str) -> dict:
     fig_lines = "\n".join(f"- Figure {i + 1} [占位] -> 源：{f.get('path')}"
                           for i, f in enumerate(figures)) or "- （本轮无 P1 产出图）"
     ev_boundary = "探索性"
+    # Results 的措辞约束必须随 T21 走：T21 pass 却仍写"不写显著字样"是自相矛盾
+    results_note = ("Results：可提出统计主张（差异基因数、富集通路须逐项锚定 P1 产出文件的数字，不得改写）"
+                    if t21 != "fail" else
+                    "Results：仅描述性图表呈现；**不写\"显著\"字样**（无统计支撑）")
     # 图/表目录一律从 P1 实际产出路径推导，不写死 rnaseq_de 等模块名
     fig_dir = (os.path.dirname(str(figures[0].get("path", ""))).replace("\\", "/") + "/") if figures else ""
     tbl_dir = ""
@@ -165,7 +169,7 @@ def run_p2(ws: str) -> dict:
 ## 各节要点（骨架，不铺陈）
 - Introduction：背景 2-3 要点；gap statement 1 条（然而/尚未）
 - Materials and Methods：数据来源（GEO {ACC}，登录号见数据可用性）、QC 步骤、软件版本
-- Results：仅描述性图表呈现；**不写"显著"字样**（无统计支撑）
+- {results_note}
 - Discussion：以局限为主；不得引入结果中未出现的机制词
 - Declarations：8 项齐全（不适用写 Not applicable）
 

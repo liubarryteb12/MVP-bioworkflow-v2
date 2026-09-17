@@ -2,12 +2,11 @@ dataset: GSE113865
 stage: basic
 requested_at: 2026-09-18T00:00:00+08:00
 requested_by: agent
-rerun: 7
+rerun: 8
 rerun_reason: >-
-  修复探针 ID 被行名覆盖的根因后重跑。deg_table 自带 probe_id 列（ILMN_*），
-  但原代码无条件 deg$probe_id <- rownames(deg)，行名是 1..n，
-  于是拿"1、2、3…"当基因 ID 查询并被 ENTREZID 命中——这正是此前 100% 覆盖率假富集的来源。
-  修好后 probe_map（31266 探针有 Entrez）才能匹配上，富集应产出真实 GO/KEGG 结果。
+  收口一轮。上一轮(run 35251459530)已全链路跑通：P1(preprocess/differential/pathway_enrichment 全 success，
+  真实 GO 富集 1650 条、64 个显著基因、universe 20762) → P2 → P3 → P4-b 全部产出。
+  本轮只修 P2 大纲里一句与 T21 pass 自相矛盾的硬编码（"不写显著字样"），使文案与判定一致。
 note: >-
   第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，
   平台 GPL10558（Illumina HumanHT-12 V4.0），6 样本（GSM3121915-920），
