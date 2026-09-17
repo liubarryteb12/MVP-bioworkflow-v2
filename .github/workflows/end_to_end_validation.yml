@@ -1,11 +1,13 @@
 # P1-P4 端到端验证 · 云端执行入口（第二版）
 #
 # 触发方式：
-#   1) 推送/更新 .github/triggers/<DATASET>.flag 文件（推荐，绕过默认分支限制）
-#   2) workflow_dispatch（要求 workflow 位于默认分支，当前默认分支为第一版 main，故不可用）
+#   1) 推送/更新 .github/triggers/<DATASET>.flag 文件（推荐；workflow 位于第二版分支，
+#      故 push 触发器分支过滤须设为 第二版）
+#   2) workflow_dispatch 不可用：GitHub 的 workflow_dispatch 只认默认分支上的 workflow，
+#      而默认分支为第一版 main，第二版 workflow 不在默认分支上。
 #
-# 背景：GitHub 的 workflow_dispatch 只认默认分支上的 workflow 文件。为不改动默认分支、
-#       不污染第一版，第二版一律用 push-paths + flag 文件触发。
+# 背景：为不改动默认分支、不污染第一版，第二版一律用 push-paths + flag 文件触发。
+#       当前第二版数据集 = GSE174263（Drosophila 卵巢 RNA-seq，GPL21306），注释库用 org.Dm.eg.db。
 #
 # 纪律：完全按对应论文的分析思路走，不做自定义；失败如实报告，不掩盖。
 # 已知环境约束：clusterProfiler 在云端安装失败（依赖 treeio），通路富集改用
@@ -28,7 +30,7 @@ on:
         required: false
         default: 'true'
   push:
-    branches: [main]
+    branches: [第二版]
     paths:
       - '.github/triggers/*.flag'
 
@@ -88,11 +90,11 @@ jobs:
 
       - name: Install Bioconductor packages (one by one, never abort)
         run: |
-          for p in GEOquery limma affy DESeq2 org.Hs.eg.db org.Mm.eg.db GO.db hgu133plus2.db hgu95av2.db matrixStats gplots; do
+          for p in GEOquery limma affy DESeq2 org.Hs.eg.db org.Mm.eg.db org.Dm.eg.db GO.db hgu133plus2.db hgu95av2.db matrixStats gplots; do
             echo "=== installing $p ==="
             Rscript -e "BiocManager::install('$p', ask = FALSE, update = FALSE, Ncpus = 4)" 2>&1 | tail -3 || echo "FAILED: $p"
           done
-          Rscript -e 'for (p in c("limma","affy","org.Hs.eg.db","GO.db","hgu133plus2.db")) cat(p, requireNamespace(p, quietly=TRUE), "\n")'
+          Rscript -e 'for (p in c("limma","affy","org.Hs.eg.db","org.Dm.eg.db","GO.db","hgu133plus2.db")) cat(p, requireNamespace(p, quietly=TRUE), "\n")'
 
       - name: Install Python deps
         run: |

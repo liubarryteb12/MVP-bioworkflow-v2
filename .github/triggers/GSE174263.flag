@@ -1,0 +1,5 @@
+dataset: GSE174263
+stage: basic
+requested_at: 2026-09-17T00:00:00+08:00
+requested_by: agent
+note: 第二版当前数据集；Drosophila 卵巢 RNA-seq，平台 GPL21306，4 样本（GSM5290389-92）

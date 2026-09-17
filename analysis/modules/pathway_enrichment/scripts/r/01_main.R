@@ -3,7 +3,9 @@
 #
 # 论文原文用 MAPPFinder 做通路富集；MAPPFinder 为商业/遗留工具，云端不可安装。
 # clusterProfiler 在云端安装失败（依赖 treeio 加载异常，见 env_probe 探测结论）。
-# 因此这里直接用 org.Hs.eg.db 的 GO / KEGG 映射 + 超几何检验 + BH 校正实现等价的富集分析。
+# 因此这里用 org.*.eg.db（由参数 org_db 指定，默认 org.Hs.eg.db；Drosophila 用 org.Dm.eg.db）
+# 的 GO / KEGG 映射 + 超几何检验 + BH 校正实现等价的富集分析。
+# 基因 ID → ENTREZ 映射按 PROBEID/ENSEMBL/FLYBASE/SYMBOL 顺序尝试，兼容微阵列与 RNA-seq。
 # 该替换必须在 handoff 与 Methods 中显式声明，不得隐瞒。
 #
 # 纪律：不硬编码路径，一切从 input JSON 读；随机种子固定；写日志。
@@ -66,10 +68,29 @@ if (!requireNamespace(org_db, quietly = TRUE)) {
 }
 
 db <- get(annot_db)
-map_all <- AnnotationDbi::select(db, keys = as.character(deg$probe_id),
-                                 columns = "ENTREZID", keytype = "PROBEID")
-map_sig <- AnnotationDbi::select(db, keys = as.character(sig$probe_id),
-                                 columns = "ENTREZID", keytype = "PROBEID")
+
+# 基因 ID → ENTREZ 映射：微阵列用 PROBEID；RNA-seq（如 GSE174263 / Drosophila）的
+# deg_table 多为 FlyBase / Ensembl / 基因符号，需按可用 keytype 逐一尝试。
+map_ids_to_entrez <- function(db, ids) {
+  if (length(ids) == 0) return(data.frame(PROBEID = character(0), ENTREZID = character(0)))
+  avail <- tryCatch(AnnotationDbi::columns(db), error = function(e) character(0))
+  for (kt in c("PROBEID", "ENSEMBL", "FLYBASE", "SYMBOL", "ENTREZID")) {
+    if (!(kt %in% avail)) next
+    res <- tryCatch(
+      AnnotationDbi::select(db, keys = as.character(ids), columns = "ENTREZID", keytype = kt),
+      error = function(e) NULL)
+    if (is.null(res) || !"ENTREZID" %in% names(res)) next
+    res <- res[!is.na(res$ENTREZID) & res$ENTREZID != "", ]
+    if (nrow(res) > 0) {
+      cat("  mapping keytype used: ", kt, " (", nrow(res), " rows)\n", sep = "")
+      return(res)
+    }
+  }
+  data.frame(PROBEID = character(0), ENTREZID = character(0))
+}
+
+map_all <- map_ids_to_entrez(db, deg$probe_id)
+map_sig <- map_ids_to_entrez(db, sig$probe_id)
 universe <- unique(na.omit(map_all$ENTREZID))
 gene <- unique(na.omit(map_sig$ENTREZID))
 cat("universe genes: ", length(universe), "  significant genes: ", length(gene), "\n", sep = "")

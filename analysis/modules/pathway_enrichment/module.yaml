@@ -8,10 +8,12 @@ registered_at: 2026-09-15T16:00:00+08:00
 registered_by: agent
 
 description: >
-  对 limma 检出的显著差异探针做 GO / KEGG 通路富集。
+  对显著差异基因做 GO / KEGG 通路富集。
   论文原文用 MAPPFinder；MAPPFinder 为商业遗留工具，云端不可安装，
   clusterProfiler 在云端安装失败（依赖 treeio 加载异常），
-  因此改用 org.Hs.eg.db 注释映射 + 超几何检验 + BH 校正实现等价富集。
+  因此改用 org.*.eg.db 注释映射（由参数 org_db 指定；
+  当前第二版数据集 GSE174263 为 Drosophila，用 org.Dm.eg.db）
+  + 超几何检验 + BH 校正实现等价富集。
   该替换已在 handoff 与 Methods 中显式声明。
 
 papers:
@@ -45,11 +47,11 @@ parameters:
     default: 1.0
   - name: annotation_db
     type: string
-    default: hgu133plus2.db
-    description: 探针注释包；GPL570 用 hgu133plus2.db，GPL8300 用 hgu95av2.db
+    default: org.Dm.eg.db
+    description: 注释包；GSE174263(Drosophila/GPL21306) 用 org.Dm.eg.db；GPL570 用 hgu133plus2.db，GPL8300 用 hgu95av2.db
   - name: org_db
     type: string
-    default: org.Hs.eg.db
+    default: org.Dm.eg.db
   - name: min_term_size
     type: int
     default: 5
