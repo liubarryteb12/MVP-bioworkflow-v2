@@ -2,12 +2,12 @@ dataset: GSE113865
 stage: basic
 requested_at: 2026-09-17T23:00:00+08:00
 requested_by: agent
-rerun: 4
+rerun: 5
 rerun_reason: >-
-  映射函数加固后重跑。上一轮(run 35244109358)已确认 illuminaHumanv4.db 安装成功、
-  平台识别正确(annotation_db=illuminaHumanv4.db)、94 个显著探针已算出，
-  但 map_ids_to_entrez 里 nrow(res) 在 res 为 NULL 时报 argument is of length zero 而中止。
-  本次改为逐项防御 + 新增 PROBEID->SYMBOL->ENTREZ 中转兜底。
+  纠正富集的错误映射后重跑。上一轮(run 35246267394)虽 status=completed，
+  但 map_ids_to_entrez 的 keytype 兜底列表含 "ENTREZID"，导致把 ILMN_ 探针号当 ENTREZID 查，
+  得到 1:1 恒等映射（47320 探针 -> 47320 基因，universe 等于探针总数），
+  GO 出的 2597 条是伪造成果——必须判空重来。本次改为 Bimap 优先 + 100% 覆盖率即拒绝。
 note: >-
   第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，
   平台 GPL10558（Illumina HumanHT-12 V4.0），6 样本（GSM3121915-920），

@@ -90,11 +90,14 @@ db <- get(annot_db)
 
 # 基因 ID → ENTREZ 映射：微阵列用 PROBEID；RNA-seq（如 GSE174263 / Drosophila）的
 # deg_table 多为 FlyBase / Ensembl / 基因符号，需按可用 keytype 逐一尝试。
+# 注意：keytype 列表里**不含** "ENTREZID"。曾把探针 ID 当 ENTREZID 去查，
+# 结果得到 1:1 恒等映射（47320 探针 -> 47320 "基因"，universe 等于探针总数），
+# 富集因此产出看似合理的 GO 条目——那是伪造成果，比直接失败更危险。
 map_ids_to_entrez <- function(db, ids) {
   empty <- data.frame(PROBEID = character(0), ENTREZID = character(0))
   if (length(ids) == 0) return(empty)
   avail <- tryCatch(AnnotationDbi::columns(db), error = function(e) character(0))
-  for (kt in c("PROBEID", "ENSEMBL", "FLYBASE", "SYMBOL", "ENTREZID")) {
+  for (kt in c("PROBEID", "ENSEMBL", "FLYBASE", "SYMBOL")) {
     if (!(kt %in% avail)) next
     res <- tryCatch(
       AnnotationDbi::select(db, keys = as.character(ids), columns = "ENTREZID", keytype = kt),
@@ -110,6 +113,36 @@ map_ids_to_entrez <- function(db, ids) {
     if (nrow(res) > 0) return(res)
   }
   empty
+}
+
+# 芯片注释库的标准入口是 `{prefix}ENTREZID` 这个 Bimap 对象（如 illuminaHumanv4ENTREZID、
+# hgu133plus2ENTREZID），键为探针 ID、值为 ENTREZ。比 select(keytype=) 更可靠：
+# select 在多键映射下可能返回非预期结构，而 Bimap 是设计用途。
+map_by_bimap <- function(pkg, ids) {
+  empty <- data.frame(PROBEID = character(0), ENTREZID = character(0))
+  if (length(ids) == 0) return(empty)
+  obj_nm <- paste0(sub("\\.db$", "", pkg), "ENTREZID")
+  if (!exists(obj_nm, inherits = TRUE)) {
+    cat("  bimap ", obj_nm, ": absent\n", sep = "")
+    return(empty)
+  }
+  bm <- get(obj_nm)
+  lst <- tryCatch(AnnotationDbi::as.list(bm[as.character(ids)]), error = function(e) NULL)
+  if (is.null(lst) || length(lst) == 0) {
+    cat("  bimap ", obj_nm, ": no entries\n", sep = "")
+    return(empty)
+  }
+  ent <- vapply(lst, function(x) {
+    x <- x[!is.na(x)]
+    if (length(x) == 0) NA_character_ else as.character(x[1])
+  }, character(1))
+  ok <- !is.na(ent) & ent != ""
+  if (!any(ok)) {
+    cat("  bimap ", obj_nm, ": all NA\n", sep = "")
+    return(empty)
+  }
+  cat("  bimap ", obj_nm, ": ", sum(ok), " / ", length(ids), " probes -> ENTREZ\n", sep = "")
+  data.frame(PROBEID = names(lst)[ok], ENTREZID = ent[ok], stringsAsFactors = FALSE)
 }
 
 # 兜底：探针 -> SYMBOL -> ENTREZ 中转。
@@ -139,15 +172,25 @@ map_via_symbol <- function(probe_db, org_pkg, ids) {
   out
 }
 
-map_all <- map_ids_to_entrez(db, deg$probe_id)
-if (nrow(map_all) == 0) {
-  cat("direct mapping empty -> SYMBOL pivot via ", org_db, "\n", sep = "")
-  map_all <- map_via_symbol(db, org_db, deg$probe_id)
+# 三级兜底：① 芯片库 Bimap（探针→ENTREZ 的设计入口）② select 多 keytype ③ SYMBOL 中转
+map_ids <- function(ids) {
+  m <- map_by_bimap(annot_db, ids)
+  if (nrow(m) == 0) m <- map_ids_to_entrez(db, ids)
+  if (nrow(m) == 0) {
+    cat("direct mapping empty -> SYMBOL pivot via ", org_db, "\n", sep = "")
+    m <- map_via_symbol(db, org_db, ids)
+  }
+  m
 }
-map_sig <- map_ids_to_entrez(db, sig$probe_id)
-if (nrow(map_sig) == 0) {
-  cat("direct mapping empty (sig) -> SYMBOL pivot via ", org_db, "\n", sep = "")
-  map_sig <- map_via_symbol(db, org_db, sig$probe_id)
+map_all <- map_ids(deg$probe_id)
+map_sig <- map_ids(sig$probe_id)
+
+# 恒等映射防护：真实注释库不可能把每一个探针都映射到 ENTREZ。
+# 一旦 universe 覆盖全部探针、显著基因又等于全部显著探针，那就是"输入原样回传"，
+# 据此跑出的富集是伪造成果——宁可判空，也不产出。
+if (length(unique(map_all$ENTREZID)) >= nrow(deg) && nrow(sig) > 0 &&
+    length(unique(map_sig$ENTREZID)) >= nrow(sig)) {
+  write_empty("mapping rejected: 100% coverage = identity passthrough, not real annotation")
 }
 universe <- unique(na.omit(map_all$ENTREZID))
 gene <- unique(na.omit(map_sig$ENTREZID))
