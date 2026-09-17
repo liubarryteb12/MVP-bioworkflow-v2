@@ -69,11 +69,15 @@ if (nrow(sig) == 0) {
   write_empty("no significant genes")
 }
 
-if (!requireNamespace(annot_db, quietly = TRUE)) {
-  write_empty(paste0("annotation package missing: ", annot_db))
+for (pkg in unique(c(annot_db, org_db))) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    write_empty(paste0("annotation package missing: ", pkg))
+  }
 }
-if (!requireNamespace(org_db, quietly = TRUE)) {
-  write_empty(paste0("org package missing: ", org_db))
+# 必须 attach：requireNamespace 只让命名空间可用，不把注释对象放进搜索路径，
+# 直接 get(annot_db) 会报 object not found（同理 org_*GO2ALLEGS / org_*PATH 也取不到）。
+for (pkg in unique(c(annot_db, org_db))) {
+  suppressPackageStartupMessages(library(pkg, character.only = TRUE))
 }
 
 db <- get(annot_db)
