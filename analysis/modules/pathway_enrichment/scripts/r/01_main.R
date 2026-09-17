@@ -53,9 +53,15 @@ write_empty <- function(msg) {
 
 deg <- read.csv(get_in("deg_table"), stringsAsFactors = FALSE)
 # 基因 ID 列：DESeq2 为 gene_id；limma 多为行名或 id
-if ("gene_id" %in% names(deg)) deg$probe_id <- deg$gene_id
-else if ("id" %in% names(deg)) deg$probe_id <- deg$id
-else deg$probe_id <- rownames(deg)
+# 注意：else 必须与 } 同行。Rscript 按块解析，换行写 else 会直接报
+# "unexpected 'else' in \"else\"" 并 Execution halted（本模块此前即因此静默失败）。
+if ("gene_id" %in% names(deg)) {
+  deg$probe_id <- deg$gene_id
+} else if ("id" %in% names(deg)) {
+  deg$probe_id <- deg$id
+} else {
+  deg$probe_id <- rownames(deg)
+}
 # 显著性列：兼容 DESeq2(padj / log2FoldChange) 与 limma(adj.P.Val / logFC)
 padj_col <- if ("padj" %in% names(deg)) "padj" else if ("adj.P.Val" %in% names(deg)) "adj.P.Val" else NULL
 lfc_col  <- if ("log2FoldChange" %in% names(deg)) "log2FoldChange" else if ("logFC" %in% names(deg)) "logFC" else NULL
