@@ -70,6 +70,28 @@ def parse_matrix(text: str) -> dict:
     return {"titles": titles, "characteristics": chars, "gsms": gsms}
 
 
+def _token_groups(titles, gsms):
+    """标题分词条件兜底：用样本标题首个非噪声词分组建对比（≥2 组、每组 ≥2 样本）。"""
+    _NOISE = {"rna", "seq", "ov", "rep", "replicate", "sample", "gsm", "knock", "down",
+              "knockdown", "control", "case", "healthy", "normal", "tumor", "disease",
+              "vs", "and", "or", "r1", "r2", "r3", "r4", "rep1", "rep2", "rep3", "rep4",
+              "wt", "mut", "mock", "treated", "untreated", "d0", "d1", "d2", "d3", "d4",
+              "h0", "h1", "h2", "h3", "h4", "cell", "line", "type", "pool", "pooled",
+              "rna_seq", "rnaseq", "ovarian", "ovary", "melanogaster", "drosophila"}
+    conds = []
+    for t in titles:
+        toks = re.findall(r"[A-Za-z0-9()]+", t or "")
+        cand = [x for x in toks if x.lower() not in _NOISE and not x.isdigit() and len(x) >= 2]
+        conds.append(cand[0] if cand else "unclassified")
+    g = {}
+    for c, gid in zip(conds, gsms):
+        g.setdefault(c, []).append(gid)
+    if len(g) >= 2 and "unclassified" not in g and min(len(v) for v in g.values()) >= 2:
+        ev = [f"{gid}: {t} -> {c}" for t, gid, c in zip(titles, gsms, conds)]
+        return g, ev
+    return None, None
+
+
 def infer_groups(acc: str, meta: dict, proxy: str | None) -> dict:
     """推断分组。返回 {method, groups:{label:[gsm]}, evidence:[...]}"""
     text = fetch_series_matrix(acc, proxy)
@@ -92,8 +114,18 @@ def infer_groups(acc: str, meta: dict, proxy: str | None) -> dict:
         groups.setdefault(g, []).append(m["gsms"][i] if i < len(m["gsms"]) else f"idx{i}")
         evidence.append(f"{m['gsms'][i] if i < len(m['gsms']) else i}: {t} -> {g}")
 
+    # 关键词匹配未形成有效对比（如敲低/过表达设计）时，用标题首个非噪声词兜底分组
+    method = "series_matrix_title_and_characteristics"
+    non_trivial = [k for k in groups if k != "unclassified"]
+    if len(non_trivial) < 2:
+        tk, tk_ev = _token_groups(titles, m["gsms"])
+        if tk:
+            groups = tk
+            evidence = tk_ev
+            method = "title_token_condition"
+
     return {
-        "method": "series_matrix_title_and_characteristics",
+        "method": method,
         "groups": {k: v for k, v in sorted(groups.items())},
         "group_sizes": {k: len(v) for k, v in sorted(groups.items())},
         "evidence_head": evidence[:40],
