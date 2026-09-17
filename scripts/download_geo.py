@@ -119,7 +119,6 @@ def main() -> int:
         return 2
 
     picked = [f for f in files if args.prefer.lower() in f.lower()]
-    sm = [f for f in files if f.lower() == f"{acc.lower()}_series_matrix.txt.gz"]
     meta_n = None
     meta_p = os.path.join("04_journal", "snapshots", "geo_meta", f"{acc}_meta.yaml")
     if os.path.exists(meta_p):
@@ -128,12 +127,13 @@ def main() -> int:
                 meta_n = (yaml.safe_load(f) or {}).get("n_samples")
         except Exception:
             pass
-    if args.smart_size and sm and meta_n and meta_n > 50:
-        # 大样本数据集：RAW.tar 通常是数 GB（每 CEL ~5MB），series matrix ~80MB。
-        # 判定依据 = 已核验的 meta n_samples（HEAD 探测对 NCBI 不可靠），>50 样本一律降载。
-        picked = sm
-        log["notes"].append(f"n_samples={meta_n}>50：降载为 series matrix 表达矩阵（避免数 GB RAW.tar）")
-        print(f"[{acc}] n_samples={meta_n} > 50 → 改用 series matrix")
+    if args.smart_size and meta_n and meta_n > 50:
+        # 大样本数据集降载：series matrix 在 /matrix/ 目录（不在 suppl/），~80MB；
+        # RAW.tar 是数 GB（每 CEL ~5MB）。判定依据 = 已核验 meta n_samples>50（HEAD 对 NCBI 不可靠）。
+        log["source_base"] = f"https://ftp.ncbi.nlm.nih.gov/geo/series/{series_dir(acc)}/{acc}/matrix/"
+        picked = [f"{acc}_series_matrix.txt.gz"]
+        log["notes"].append(f"n_samples={meta_n}>50：降载为 series matrix（source 切到 /matrix/）")
+        print(f"[{acc}] n_samples={meta_n} > 50 → 改用 series matrix（/matrix/ 目录）")
     targets = picked if picked else [f for f in files if f.lower().endswith((".tar", ".gz", ".tgz", ".zip"))]
     if not targets:
         targets = files
