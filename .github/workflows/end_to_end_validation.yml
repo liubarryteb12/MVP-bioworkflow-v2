@@ -107,9 +107,10 @@ jobs:
           pip freeze > logs/requirements_frozen.txt
 
       # 云端 runner 有公网直连能力，不要走本地代理（--no-proxy）
+      # 大数据集（RAW.tar >300MB）自动降载为 series matrix 表达矩阵
       - name: Download dataset
         run: |
-          python scripts/download_geo.py --dataset "$DATASET_ID" --output inputs/raw/ --no-proxy
+          python scripts/download_geo.py --dataset "$DATASET_ID" --output inputs/raw/ --no-proxy --smart-size
 
       - name: Data availability analysis
         run: |

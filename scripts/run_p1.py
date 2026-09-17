@@ -30,7 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-MIN_GROUP_N = 6          # T21 组别样本量下限
+MIN_GROUP_N = 3          # P1-QC-04（02版修订合集 v3：每组 ≥3，与 de.R2 同锚；旧 T21 的 6 已废止）
 SMALL_SAMPLE_N = 30      # 低于此值给小样本 warning
 IMBALANCE_RATIO = 0.5    # min/max 低于此值判严重不平衡
 
@@ -564,6 +564,14 @@ def main() -> int:
         mod = "preprocess"
         mdir = os.path.join(out_root, mod)
         rel = lambda p: os.path.relpath(os.path.join(mdir, p), ws).replace("\\", "/")
+        series_expr = (da.get("inputs", {}) or {}).get("series_matrix_expr")
+        if series_expr:
+            inputs = [{"name": "expr_matrix", "path": series_expr, "format": "csv", "required": True}]
+            step1_params = {"input_mode": "series_matrix", "absent_fraction_threshold": 0.75, "random_seed": 42}
+        else:
+            inputs = [{"name": "cel_dir", "path": os.path.join("inputs", "raw", acc, "extracted").replace("\\", "/"),
+                       "format": "directory", "required": True}]
+            step1_params = {"absent_fraction_threshold": 0.75, "random_seed": 42}
         outputs = [
             {"name": "expr_rma", "path": rel("results/expr_rma.csv"), "format": "csv", "is_final": False},
             {"name": "expr_filtered", "path": rel("results/expr_filtered.csv"), "format": "csv", "is_final": True,
@@ -572,11 +580,10 @@ def main() -> int:
             {"name": "qc_density", "path": rel("figures/qc_density.pdf"), "format": "pdf", "is_final": True},
             {"name": "filtering_summary", "path": rel("results/filtering_summary.csv"), "format": "csv", "is_final": True},
         ]
-        inputs = [{"name": "cel_dir", "path": os.path.join("inputs", "raw", acc, "extracted").replace("\\", "/"),
-                   "format": "directory", "required": True}]
+        inputs = inputs
         ij = build_input_json(
             os.path.join(mdir, "run", f"input_{run_id}.json"), run_id, mod, inputs, outputs,
-            {"absent_fraction_threshold": 0.75, "random_seed": 42},
+            step1_params,
             rel(f"logs/{run_id}.log"),
         )
         rc = run_module(ws, mod, "analysis/modules/preprocess/scripts/r/01_main.R",

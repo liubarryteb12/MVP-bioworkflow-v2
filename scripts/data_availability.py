@@ -184,6 +184,37 @@ def main() -> int:
 
     cat = analysis_catalog.get(data_type, {"available": [], "unavailable": {"all": "数据类型未识别"}})
 
+    # 大数据集降载：series matrix 直出表达矩阵（提交者已处理/RMA），供 limma 直连
+    series_expr = None
+    sm_gz = os.path.join(raw_dir, f"{acc}_series_matrix.txt.gz")
+    if data_type == "microarray" and n_cel == 0 and os.path.exists(sm_gz):
+        try:
+            import csv as _csv
+            import gzip as _gz
+
+            out_rel = os.path.join("inputs", "metadata", f"{acc}_expr_matrix.csv")
+            out_abs = os.path.join(ws, out_rel)
+            os.makedirs(os.path.dirname(out_abs), exist_ok=True)
+            n_cols = 0
+            with _gz.open(sm_gz, "rt", encoding="utf-8", errors="replace") as f, \
+                 open(out_abs, "w", encoding="utf-8", newline="") as w:
+                wr = _csv.writer(w)
+                in_table = False
+                for line in f:
+                    if line.startswith("!series_matrix_table_begin"):
+                        in_table = True
+                        continue
+                    if line.startswith("!series_matrix_table_end"):
+                        break
+                    if in_table:
+                        row = line.rstrip("\n").split("\t")
+                        n_cols = max(n_cols, len(row) - 1)
+                        wr.writerow(row)
+            series_expr = out_rel.replace("\\", "/")
+            print(f"[{acc}] series matrix 直出表达矩阵：{out_rel}（{n_cols} 样本）")
+        except Exception as exc:
+            print(f"[{acc}] series matrix 解析失败：{exc}")
+
     doc = {
         "project_id": f"project_v2_e2e_{acc.lower()}",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -199,7 +230,8 @@ def main() -> int:
             "n_samples_geo": meta.get("n_samples"),
             "n_cel_files": n_cel,
             "n_fastq_files": n_fastq,
-        },
+            "series_matrix_expr": series_expr,
+            },
         "data_type": data_type,
         "sample_size": meta.get("n_samples") or (n_cel or n_fastq),
         "group_inference": groups,

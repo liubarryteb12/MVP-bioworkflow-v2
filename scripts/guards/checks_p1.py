@@ -16,7 +16,7 @@ from .mutation import case
 
 PART = "P1"
 
-MIN_GROUP_N = 6
+MIN_GROUP_N = 3  # P1-QC-04（02版修订合集 v3：每组 ≥3；旧 T21 的 6 已废止）
 FIVE_FORMATS = ("pdf", "png", "tiff", "jpg", "svg")
 
 

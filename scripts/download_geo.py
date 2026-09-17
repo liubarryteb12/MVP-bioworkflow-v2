@@ -80,6 +80,8 @@ def main() -> int:
     ap.add_argument("--proxy", default=DEFAULT_PROXY)
     ap.add_argument("--no-proxy", action="store_true")
     ap.add_argument("--prefer", default="_RAW.tar", help="优先下载的文件名片段")
+    ap.add_argument("--smart-size", action="store_true",
+                    help="RAW.tar >300MB 且存在 series matrix 时自动改用表达矩阵（大数据集降载）")
     args = ap.parse_args()
 
     proxy = None if args.no_proxy else args.proxy
@@ -111,6 +113,21 @@ def main() -> int:
         return 2
 
     picked = [f for f in files if args.prefer.lower() in f.lower()]
+    if args.smart_size and picked and picked[0].lower().endswith("_raw.tar"):
+        sm = [f for f in files if f.lower() == f"{acc.lower()}_series_matrix.txt.gz"]
+        if sm:
+            try:
+                proxies = {"http": proxy, "https": proxy} if proxy else None
+                r = requests.head(log["source_base"] + picked[0], proxies=proxies,
+                                  timeout=30, allow_redirects=True)
+                size = int(r.headers.get("Content-Length", 0))
+                if size > 300 * 1024 * 1024:
+                    picked = sm
+                    log["notes"].append(
+                        f"RAW.tar={size} bytes (>300MB)，自动降载为 series matrix 表达矩阵")
+                    print(f"[{acc}] RAW.tar {size/1e9:.2f}GB 过大 → 改用 series matrix")
+            except Exception as exc:
+                print(f"[{acc}] HEAD 探测失败（{exc}），维持 RAW.tar")
     targets = picked if picked else [f for f in files if f.lower().endswith((".tar", ".gz", ".tgz", ".zip"))]
     if not targets:
         targets = files

@@ -46,6 +46,26 @@ thr <- as.numeric(get_par("absent_fraction_threshold", 0.75))
 cat("cel_dir: ", cel_dir, "\nthreshold: ", thr, "\n", sep = "")
 
 # ---------- Step 1: 读 CEL + QC 图 ----------
+# 两种模式：
+#   cel 模式（默认）：affy::ReadAffy 读 CEL → 原始强度 QC → RMA → MAS5 过滤
+#   series_matrix 模式：大数据集降载，输入已是提交者处理过的表达矩阵（通常 RMA 后），
+#     跳过 CEL/RMA/MAS5，QC 由表达分布检查承担，矩阵原样直通下游（如实记录，不伪造标准化步骤）
+mode <- as.character(get_par("input_mode", "cel"))
+expr_direct <- NULL
+
+if (mode == "series_matrix") {
+  mat_file <- get_in("expr_matrix")
+  cat("mode: series_matrix  input: ", mat_file, "\n", sep = "")
+  suppressMessages(library(data.table))
+  dt <- data.table::fread(mat_file, data.table = FALSE, check.names = FALSE)
+  expr_direct <- as.matrix(dt[, -1, drop = FALSE])
+  rownames(expr_direct) <- dt[[1]]
+  expr_direct <- expr_direct[, !duplicated(colnames(expr_direct)), drop = FALSE]
+  mode_note <- "input=series matrix (submitter-processed expression matrix); CEL/RMA/MAS5 skipped; normalization QC by expression-distribution check (QC-08)"
+  cat("matrix: ", nrow(expr_direct), " x ", ncol(expr_direct), "\n", sep = "")
+}
+
+if (mode == "cel") {
 ab <- affy::ReadAffy(celfile.path = cel_dir)
 n_arrays <- ncol(exprs(ab))
 cat("n arrays: ", n_arrays, "  cdf: ", ab@cdfName, "\n", sep = "")
@@ -58,6 +78,23 @@ pdf(get_out("qc_density"), width = 7, height = 5)
 hist(ab, main = "Raw intensity density", lwd = 1)
 dev.off()
 cat("step1 done: QC figures written\n")
+} else {
+expr <- expr_direct
+for (o in c(get_out("qc_boxplot"), get_out("qc_density"))) {
+  pdf(o, width = 7, height = 5)
+  par(mar = c(9, 4, 3, 1))
+  if (endsWith(o, "boxplot.pdf")) {
+    boxplot(expr, las = 2, col = "#4C72B0", main = paste0("Expression distribution (n=", ncol(expr), ")"),
+            ylab = "Expression (log2 scale)")
+  } else {
+    apply(expr[, sample(seq_len(ncol(expr)), min(8, ncol(expr))), drop = FALSE], 2,
+          function(v) lines(density(v, na.rm = TRUE)))
+    legend("topright", bty = "n", "density (subset)")
+  }
+  dev.off()
+}
+cat("step1 done: QC figures written (series_matrix mode)\n")
+}
 
 # ---------- Step 2: RMA 标准化 ----------
 # 受限容器里 affy::rma 可能因 preprocessCore 线程创建失败而报错
@@ -94,6 +131,10 @@ summarize_medianpolish <- function(pm_mat, probeset_index) {
 }
 
 rma_method <- "affy::rma"
+if (mode == "series_matrix") {
+  rma_method <- mode_note
+  expr <- expr_direct
+} else {
 res <- try(affy::rma(ab), silent = TRUE)
 if (inherits(res, "try-error")) {
   msg <- conditionMessage(attr(res, "condition"))
@@ -117,7 +158,8 @@ if (inherits(res, "try-error")) {
 } else {
   expr <- Biobase::exprs(res)
 }
-cat("step2 done: RMA matrix ", nrow(expr), " x ", ncol(expr), "  method=", rma_method, "\n", sep = "")
+}
+cat("step2 done: matrix ", nrow(expr), " x ", ncol(expr), "  method=", rma_method, "\n", sep = "")
 
 out_rma <- get_out("expr_rma")
 dir.create(dirname(out_rma), recursive = TRUE, showWarnings = FALSE)
@@ -127,6 +169,13 @@ write.csv(data.frame(probe_id = rownames(expr), expr, check.names = FALSE), out_
 # mas5calls 与 rma 走同一套 preprocessCore 并行代码，同样可能失败。
 # 失败时按"不做过滤"处理，并在 summary 中如实声明，不伪造过滤结果。
 call_method <- "affy::mas5calls"
+if (mode == "series_matrix") {
+  call_method <- "skipped: series matrix direct (probe filtering not applicable)"
+  expr_f <- expr
+  n <- ncol(expr)
+  n_removed <- 0L
+  cat("step3 done: probes ", nrow(expr_f), " (no filtering, series matrix mode)\n", sep = "")
+} else {
 calls <- try(affy::mas5calls(ab), silent = TRUE)
 if (inherits(calls, "try-error")) {
   cat("mas5calls failed: ", conditionMessage(attr(calls, "condition")), "\n", sep = "")
@@ -146,6 +195,7 @@ if (inherits(calls, "try-error")) {
   keep <- absent_frac <= thr
   expr_f <- expr[keep, , drop = FALSE]
   n_removed <- sum(!keep)
+}
 }
 cat("step3 done: probes ", nrow(expr), " -> ", nrow(expr_f), " (removed ", n_removed, ")\n", sep = "")
 
