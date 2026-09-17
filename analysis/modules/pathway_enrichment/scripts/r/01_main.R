@@ -52,8 +52,17 @@ write_empty <- function(msg) {
 }
 
 deg <- read.csv(get_in("deg_table"), stringsAsFactors = FALSE)
-if (!"probe_id" %in% names(deg)) deg$probe_id <- rownames(deg)
-sig <- deg[!is.na(deg$adj.P.Val) & deg$adj.P.Val < padj_thr & abs(deg$logFC) > lfc_thr, ]
+# 基因 ID 列：DESeq2 为 gene_id；limma 多为行名或 id
+if ("gene_id" %in% names(deg)) deg$probe_id <- deg$gene_id
+else if ("id" %in% names(deg)) deg$probe_id <- deg$id
+else deg$probe_id <- rownames(deg)
+# 显著性列：兼容 DESeq2(padj / log2FoldChange) 与 limma(adj.P.Val / logFC)
+padj_col <- if ("padj" %in% names(deg)) "padj" else if ("adj.P.Val" %in% names(deg)) "adj.P.Val" else NULL
+lfc_col  <- if ("log2FoldChange" %in% names(deg)) "log2FoldChange" else if ("logFC" %in% names(deg)) "logFC" else NULL
+if (is.null(padj_col) || is.null(lfc_col)) {
+  write_empty("deg_table 缺少显著性列(padj/adj.P.Val 与 log2FoldChange/logFC)")
+}
+sig <- deg[!is.na(deg[[padj_col]]) & deg[[padj_col]] < padj_thr & abs(deg[[lfc_col]]) > lfc_thr, ]
 cat("significant probes: ", nrow(sig), "\n", sep = "")
 
 if (nrow(sig) == 0) {

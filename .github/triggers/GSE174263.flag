@@ -1,7 +1,7 @@
 dataset: GSE174263
 stage: basic
-requested_at: 2026-09-17T02:00:00+08:00
+requested_at: 2026-09-17T03:00:00+08:00
 requested_by: agent
-rerun: 2
-rerun_reason: 修复分组解析(Snr1KD vs mod(mdg4)KD)与计数矩阵列名对齐，RNA-seq 2v2 允许跑 DESeq2，RNA-seq 分支真正调用 pathway_enrichment 并传入 org.Dm.eg.db
+rerun: 3
+rerun_reason: 修复 pathway_enrichment 01_main.R 对 DESeq2 列名(padj/log2FoldChange/gene_id)的兼容，避免 abs(NULL) 崩溃
 note: 第二版数据集；Drosophila 卵巢 RNA-seq，平台 GPL21306，4 样本（GSM5290389-92）
