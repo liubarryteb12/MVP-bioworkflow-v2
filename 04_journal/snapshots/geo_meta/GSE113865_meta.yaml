@@ -1,0 +1,37 @@
+accession: GSE113865
+title: Genome-wide gene expression analysis of triple negative breast cancer tissue
+  and matched normal tissue
+summary:
+- To identify specifically gene expression level in only TNBC subtype, we analyed mRNA
+  microarray in 3 TNBC samples and matched normal samples.
+overall_design:
+- 3 TNBC vs. 3 normal breast tissue samples
+type: Expression profiling by array
+platform_id: GPL10558
+organism: Homo sapiens
+pubmed_id: null
+sample_ids:
+- GSM3121915
+- GSM3121916
+- GSM3121917
+- GSM3121918
+- GSM3121919
+- GSM3121920
+supplementary_files:
+- ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE113nnn/GSE113865/suppl/GSE113865_RAW.tar
+- ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE113nnn/GSE113865/suppl/GSE113865_non-normalized.txt.gz
+status: Public on Apr 30 2023
+submission_date: Apr 30 2018
+n_samples: 6
+source_url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE113nnn/GSE113865/soft/GSE113865_family.soft.gz
+fetched_at: 2026-09-17T00:00:00+0800
+raw_snapshot: 04_journal/snapshots/geo_meta/GSE113865_brief.txt
+fetch_note: >-
+  NCBI acc.cgi 网页返回 reCAPTCHA 拦截，故改从 GEO FTP 的 SOFT 文件
+  (GSE113865_family.soft.gz) 解析 Series/Sample 级字段；organism 由
+  !Series_sample_taxid = 9606 判定为 Homo sapiens；该 Series 未登记 PubMed ID。
+platform_note: >-
+  GPL10558 = Illumina HumanHT-12 V4.0 expression beadchip。非 Affymetrix，
+  不提供 CEL 文件，故 P1 走 series matrix 直连表达矩阵路径（提交者已做
+  log2 转换 + quantile 标准化）；探针 ID 形如 ILMN_xxxxxxx，注释库为
+  illuminaHumanv4.db。

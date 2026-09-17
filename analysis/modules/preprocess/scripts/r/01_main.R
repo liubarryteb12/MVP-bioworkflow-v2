@@ -60,7 +60,16 @@ if (mode == "series_matrix") {
   dt <- data.table::fread(mat_file, data.table = FALSE, check.names = FALSE)
   expr_direct <- as.matrix(dt[, -1, drop = FALSE])
   rownames(expr_direct) <- dt[[1]]
+  # series matrix 允许出现 "null"/空值，强制转数值；无法解析的置 NA，随后按行剔除
+  suppressWarnings(mode(expr_direct) <- "numeric")
+  expr_direct[!is.finite(expr_direct)] <- NA
   expr_direct <- expr_direct[, !duplicated(colnames(expr_direct)), drop = FALSE]
+  # 重复探针行会让下游 read.csv(row.names=1) 报 duplicate row.names，这里先去重
+  dup_rows <- duplicated(rownames(expr_direct))
+  if (any(dup_rows)) {
+    cat("dropping ", sum(dup_rows), " duplicated probe rows\n", sep = "")
+    expr_direct <- expr_direct[!dup_rows, , drop = FALSE]
+  }
   mode_note <- "input=series matrix (submitter-processed expression matrix); CEL/RMA/MAS5 skipped; normalization QC by expression-distribution check (QC-08)"
   cat("matrix: ", nrow(expr_direct), " x ", ncol(expr_direct), "\n", sep = "")
 }
@@ -87,9 +96,15 @@ for (o in c(get_out("qc_boxplot"), get_out("qc_density"))) {
     boxplot(expr, las = 2, col = "#4C72B0", main = paste0("Expression distribution (n=", ncol(expr), ")"),
             ylab = "Expression (log2 scale)")
   } else {
-    apply(expr[, sample(seq_len(ncol(expr)), min(8, ncol(expr))), drop = FALSE], 2,
-          function(v) lines(density(v, na.rm = TRUE)))
-    legend("topright", bty = "n", "density (subset)")
+    # 必须先 plot 第一条再 lines 后续，否则报 "plot.new has not been called yet"
+    sub_idx <- sample(seq_len(ncol(expr)), min(8, ncol(expr)))
+    dens_list <- apply(expr[, sub_idx, drop = FALSE], 2, function(v) density(v, na.rm = TRUE))
+    plot(dens_list[[1]], main = "Expression density (subset)",
+         xlab = "Expression (log2 scale)", lwd = 1)
+    if (length(dens_list) > 1) {
+      for (i in seq_along(dens_list)[-1]) lines(dens_list[[i]], lwd = 1)
+    }
+    legend("topright", bty = "n", colnames(expr)[sub_idx], lwd = 1, cex = 0.6)
   }
   dev.off()
 }
@@ -172,9 +187,14 @@ call_method <- "affy::mas5calls"
 if (mode == "series_matrix") {
   call_method <- "skipped: series matrix direct (probe filtering not applicable)"
   expr_f <- expr
+  # series matrix 可能缺值：含 NA 的探针会让下游 limma 整行变 NA，直接剔除并如实计数
+  na_rows <- rowSums(is.na(expr_f)) > 0
+  n_na_removed <- sum(na_rows)
+  if (n_na_removed > 0) expr_f <- expr_f[!na_rows, , drop = FALSE]
   n <- ncol(expr)
   n_removed <- 0L
-  cat("step3 done: probes ", nrow(expr_f), " (no filtering, series matrix mode)\n", sep = "")
+  cat("step3 done: probes ", nrow(expr), " -> ", nrow(expr_f),
+      " (NA rows removed: ", n_na_removed, ", no MAS5 filtering, series matrix mode)\n", sep = "")
 } else {
 calls <- try(affy::mas5calls(ab), silent = TRUE)
 if (inherits(calls, "try-error")) {
@@ -210,9 +230,10 @@ write.csv(
     n_removed = n_removed,
     absent_fraction_threshold = thr,
     n_samples = n,
-    cdf_name = ab@cdfName,
+    cdf_name = if (mode == "series_matrix") NA_character_ else ab@cdfName,
     rma_method = rma_method,
-    probe_filter_method = call_method
+    probe_filter_method = call_method,
+    n_na_rows_removed = if (mode == "series_matrix") n_na_removed else 0L
   ),
   out_sum, row.names = FALSE
 )

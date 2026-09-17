@@ -54,6 +54,31 @@ def org_db_for_organism(organism) -> str:
     return ORG_TO_ORGDB.get(str(organism).strip().lower(), "org.Hs.eg.db")
 
 
+# 平台 -> 芯片注释库（探针 ID → ENTREZ 映射用）
+# 探针 ID 形态因平台而异（Affy 探针集 / Illumina 的 ILMN_*），
+# org.*.eg.db 只认 ENTREZ/ENSEMBL/SYMBOL，认不了探针 ID，故必须按平台选芯片库。
+PLATFORM_TO_ANNOTDB = {
+    "GPL570": "hgu133plus2.db",      # Affymetrix HG-U133 Plus 2.0
+    "GPL96": "hgu133a.db",           # Affymetrix HG-U133A
+    "GPL91": "hgu95av2.db",          # Affymetrix HG-U95Av2
+    "GPL8300": "hgu95av2.db",        # Affymetrix HG_U95Av2
+    "GPL10558": "illuminaHumanv4.db",  # Illumina HumanHT-12 V4.0
+    "GPL13497": "illuminaHumanv4.db",  # Illumina HumanHT-12 V4.0（另一登记号）
+    "GPL6947": "illuminaHumanv3.db",   # Illumina HumanHT-12 V3.0
+    "GPL6883": "illuminaHumanv3.db",   # Illumina HumanRef-8 V3.0
+    "GPL4133": "illuminaHumanv2.db",   # Illumina human-6 v2.0
+}
+
+
+def annot_db_for_platform(platform_id, organism) -> str:
+    """按平台选芯片注释库；未登记的平台回退到物种 org 库（大概率映射失败，但如实执行）。"""
+    if platform_id:
+        hit = PLATFORM_TO_ANNOTDB.get(str(platform_id).strip().upper())
+        if hit:
+            return hit
+    return org_db_for_organism(organism)
+
+
 # 标题分词条件兜底：关键词匹配失败（如敲低/过表达设计）时，用样本标题首个非噪声词分组建对比
 _TOKEN_NOISE = {
     "rna", "seq", "ov", "rep", "replicate", "sample", "gsm", "knock", "down",
@@ -783,6 +808,13 @@ def main() -> int:
             mod = "pathway_enrichment"
             mdir = os.path.join(out_root, mod)
             rel3 = lambda p: os.path.relpath(os.path.join(mdir, p), ws).replace("\\", "/")
+            # 注释库按平台选（Illumina/Agilent 无 CEL，探针 ID 形态与 Affy 不同），
+            # 物种库按 organism 选；两者都从 data_availability 的实测元数据来，不写死。
+            _da_inputs = da.get("inputs", {}) or {}
+            annot_db = annot_db_for_platform(_da_inputs.get("platform_id"), _da_inputs.get("organism"))
+            org_db = org_db_for_organism(_da_inputs.get("organism"))
+            print(f"[{acc}] enrichment annotation_db={annot_db} (platform={_da_inputs.get('platform_id')}) "
+                  f"org_db={org_db}")
             outputs3 = [
                 {"name": "enrich_go", "path": rel3("results/enrich_go.csv"), "format": "csv", "is_final": True,
                  "partn_n_output": partn_n(seq)},
@@ -796,7 +828,9 @@ def main() -> int:
                         "format": "csv", "required": True}]
             ij3 = build_input_json(os.path.join(mdir, "run", f"input_{run_id}.json"), run_id, mod, inputs3, outputs3,
                                    {"padj_threshold": 0.05, "log2fc_threshold": 1.0,
-                                    "annotation_db": "hgu133plus2.db", "kegg_organism": "hsa", "random_seed": 42},
+                                    "annotation_db": annot_db, "org_db": org_db,
+                                    "kegg_organism": "hsa" if org_db == "org.Hs.eg.db" else "auto",
+                                    "random_seed": 42},
                                    rel3(f"logs/{run_id}.log"))
             rc3 = run_module(ws, mod, "analysis/modules/pathway_enrichment/scripts/r/01_main.R",
                              os.path.relpath(ij3, ws).replace("\\", "/"))
@@ -805,7 +839,8 @@ def main() -> int:
                 "module_id": mod, "module_version": "1.0.0", "run_id": run_id, "timestamp": ts,
                 "status": "success" if ok3 else "failed", "execution_backend": "github_actions",
                 "inputs": inputs3, "outputs": outputs3,
-                "parameters": {"padj_threshold": 0.05, "log2fc_threshold": 1.0, "annotation_db": "hgu133plus2.db"},
+                "parameters": {"padj_threshold": 0.05, "log2fc_threshold": 1.0,
+                               "annotation_db": annot_db, "org_db": org_db},
                 "environment": {"os": "Linux", "r_version": "4.3.1", "random_seed": 42},
                 "qc_result": {"passed": ok3, "checks": [t21]},
             })
@@ -813,7 +848,7 @@ def main() -> int:
                           module_id=mod, dataset=acc, run_id=run_id, timestamp=ts,
                           status="success" if ok3 else "failed",
                           what="通路富集（GO / KEGG）",
-                          did="显著探针 → ENTREZ 映射 → clusterProfiler GO/KEGG（BH）",
+                          did=f"显著探针 → {annot_db} 映射 ENTREZ → {org_db} 的 GO/KEGG 超几何检验 + BH",
                           inputs_desc=f"- {inputs3[0]['path']}",
                           outputs_desc="\n".join(f"- {o['name']}: {o['path']}" for o in outputs3),
                           result="见 enrich_go.csv / enrich_kegg.csv" if ok3 else "执行失败",
@@ -826,8 +861,10 @@ def main() -> int:
             write_next_tasklist(os.path.join(mdir, "records", "next_tasklist.md"), acc, mod, t21, [])
             run_state["steps"].append({"module_id": mod, "status": "success" if ok3 else "failed"})
             methods.append({"method_id": "M003", "module_id": mod,
-                            "description": "clusterProfiler GO/KEGG 富集（论文用 MAPPFinder，云端以 clusterProfiler 实现等价功能，已在 handoff 声明）",
-                            "software": "clusterProfiler", "version": "Bioconductor 3.18"})
+                            "description": f"GO/KEGG 超几何富集（论文用 MAPPFinder，云端以 {annot_db} + {org_db} "
+                                           f"映射 + 超几何检验 + BH 实现等价功能，已在 handoff 声明；"
+                                           f"clusterProfiler 在本环境安装失败，未使用）",
+                            "software": f"{annot_db} + {org_db}", "version": "Bioconductor 3.18"})
             produced_figures += [o["path"] for o in outputs3 if o["format"] == "pdf"]
 
             # 证据（数字全部来自文件）

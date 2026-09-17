@@ -12,3 +12,10 @@
 
 # 运行态大文件不入库（结果以 artifact 落位编号文件夹为准）
 inputs/raw/
+
+# 云端 gh run download 回传产物：不入库（结果落位编号文件夹），避免污染第二版仓库
+/GSE174263_artifacts/
+/GSE174263_artifacts2/
+/GSE113865_artifacts/
+__pycache__/
+*.pyc

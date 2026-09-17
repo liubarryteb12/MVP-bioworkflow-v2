@@ -85,12 +85,13 @@ rules:
 execution:
   backend: github_actions
   github_actions:
-    repo: liubarryteb12/MVP-bioworkflow-version2  # 第二版独立仓库，整个仓库即第二版
-    branch: main
+    repo: liubarryteb12/MVP-bioworkflow-version2  # 第二版仓库
+    branch: 第二版                                # 第二版 workflow 所在分支（默认分支 main 装的是第一版）
     workflow: end_to_end_validation.yml
     enabled: true
     timeout_minutes: 360
-    dispatch_available: true                      # 主分支即第二版，workflow_dispatch 可直接用
+    dispatch_available: false                     # workflow_dispatch 只认默认分支上的 workflow，第二版须用 push + flag 触发
+    trigger: .github/triggers/<DATASET>.flag
 
 spec_source:
   master: 00.总框架固定/02版/合集-全五份.md   # 修订合集 v3（三轮外部审核+自检），唯一真源
@@ -104,19 +105,29 @@ spec_source:
     - "P4 补 4 预估维度 + E4；匹配权重 3/3/2/2/1/1 归一化"
 
 datasets:
+  current:
+    id: GSE113865               # 用户指定：人源、小数据量
+    platform: GPL10558          # Illumina HumanHT-12 V4.0（非 Affymetrix，无 CEL）
+    organism: Homo sapiens
+    n_samples: 6                # 3 TNBC + 3 配对癌旁正常（GEO SOFT 实测 2026-09-17）
+    design: paired 3 vs 3
+    expected_qc04: pass         # 每组 =3，恰好达 P1-QC-04 下限，附小样本 warning
+    download_mode: raw_tar + series_matrix   # 表达矩阵取自 series matrix（提交者已 log2 + quantile）
+    annotation_db: illuminaHumanv4.db        # ILMN_* 探针 → ENTREZ
+    org_db: org.Hs.eg.db
   basic:
-    - id: GSE31210
+    - id: GSE113865             # 当前主跑（人源小数据）
       priority: 1
-      platform: GPL570
-      n_samples: 246            # 226 LUAD tumor + 20 normal（实测核验 2026-09-17）
-      expected_qc04: pass       # 每组 ≥3，两组均满足
-      download_mode: series_matrix   # RAW.tar >2GB 自动降载
+    - id: GSE31210              # 已跑通：GPL570 / 246 样本，series matrix 降载
+      priority: 2
+    - id: GSE174263             # 已跑通：GPL21306 / Drosophila RNA-seq 4 样本
+      priority: 3
   advanced:
     - id: GSE299393
-      priority: 2
+      priority: 4
       chain: single_cell        # 10X Read10X，待接入
     - id: GSE237308
-      priority: 3
+      priority: 5
       chain: spatial            # Visium S9，397 spots，待接入
 
 budgets:

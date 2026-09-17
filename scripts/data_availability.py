@@ -132,6 +132,41 @@ def infer_groups(acc: str, meta: dict, proxy: str | None) -> dict:
     }
 
 
+def load_manual_groups(ws: str, acc: str) -> dict | None:
+    """优先采用人工确认的样本分组表。
+
+    框架纪律：分组不得凭关键词硬猜，能人工确认时以人工表为准（P4 纲要 §1.4 数据可验证）。
+    文件名用 `.manual.csv` 而非 `_sample_sheet.csv`——后者是 run_p1.py 的运行时产物，
+    会被自动推断结果覆盖，人工表必须独立存放才不会被冲掉。
+    """
+    import csv as _csv
+
+    path = os.path.join(ws, "inputs", "metadata", f"{acc}_sample_sheet.manual.csv")
+    if not os.path.exists(path):
+        return None
+    groups: dict[str, list] = {}
+    evidence = []
+    with open(path, encoding="utf-8") as f:
+        for row in _csv.DictReader(f):
+            gsm = (row.get("gsm") or "").strip()
+            grp = (row.get("group") or "").strip()
+            if not gsm or not grp:
+                continue
+            groups.setdefault(grp, []).append(gsm)
+            evidence.append(f"{gsm}: {row.get('title', '').strip()} -> {grp}（人工确认表）")
+    usable = [k for k in groups if k != "unclassified"]
+    if len(usable) < 2 or min(len(v) for v in groups.values()) < 1:
+        print(f"[{acc}] 人工分组表不足以形成对比（{ {k: len(v) for k, v in groups.items()} }），回退自动推断")
+        return None
+    print(f"[{acc}] 采用人工确认分组表：{path}")
+    return {
+        "method": "manual_sample_sheet",
+        "groups": {k: v for k, v in sorted(groups.items())},
+        "group_sizes": {k: len(v) for k, v in sorted(groups.items())},
+        "evidence_head": evidence[:40],
+    }
+
+
 def detect_data_type(meta: dict, raw_dir: str) -> str:
     gtype = (meta.get("type") or "").lower()
     if "single cell" in gtype:
@@ -184,7 +219,8 @@ def main() -> int:
     data_type = detect_data_type(meta, raw_dir)
     n_cel = count_raw_files(raw_dir, (".cel",))
     n_fastq = count_raw_files(raw_dir, (".fastq", ".fq", ".fastq.gz", ".fq.gz"))
-    groups = infer_groups(acc, meta, proxy)
+    # 分组优先级：人工确认表 > series matrix 自动推断。自动推断仅作兜底。
+    groups = load_manual_groups(ws, acc) or infer_groups(acc, meta, proxy)
 
     analysis_catalog = {
         "microarray": {
@@ -243,7 +279,9 @@ def main() -> int:
                     if line.startswith("!series_matrix_table_end"):
                         break
                     if in_table:
-                        row = line.rstrip("\n").split("\t")
+                        # GEO 表头/字段带双引号（"ID_REF"、"GSMxxxxxxx"），必须剥掉，
+                        # 否则下游用列名匹配 sample_sheet 的 gsm 时全部落空。
+                        row = [c.strip().strip('"') for c in line.rstrip("\n").split("\t")]
                         n_cols = max(n_cols, len(row) - 1)
                         wr.writerow(row)
             series_expr = out_rel.replace("\\", "/")

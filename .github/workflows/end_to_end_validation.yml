@@ -90,11 +90,11 @@ jobs:
 
       - name: Install Bioconductor packages (one by one, never abort)
         run: |
-          for p in GEOquery limma affy DESeq2 org.Hs.eg.db org.Mm.eg.db org.Dm.eg.db GO.db hgu133plus2.db hgu95av2.db matrixStats gplots; do
+          for p in GEOquery limma affy DESeq2 org.Hs.eg.db org.Mm.eg.db org.Dm.eg.db GO.db hgu133plus2.db hgu95av2.db illuminaHumanv4.db matrixStats gplots; do
             echo "=== installing $p ==="
             Rscript -e "BiocManager::install('$p', ask = FALSE, update = FALSE, Ncpus = 4)" 2>&1 | tail -3 || echo "FAILED: $p"
           done
-          Rscript -e 'for (p in c("limma","affy","org.Hs.eg.db","org.Dm.eg.db","GO.db","hgu133plus2.db")) cat(p, requireNamespace(p, quietly=TRUE), "\n")'
+          Rscript -e 'for (p in c("limma","affy","org.Hs.eg.db","org.Dm.eg.db","GO.db","hgu133plus2.db","illuminaHumanv4.db")) cat(p, requireNamespace(p, quietly=TRUE), "\n")'
 
       - name: Install Python deps
         run: |
@@ -112,7 +112,9 @@ jobs:
       # 大数据集（RAW.tar >300MB）自动降载为 series matrix 表达矩阵
       - name: Download dataset
         run: |
-          python scripts/download_geo.py --dataset "$DATASET_ID" --output inputs/raw/ --no-proxy --smart-size
+          # --with-series-matrix：非 Affymetrix 芯片（Illumina / Agilent）不提供 CEL，
+          # series matrix 是唯一可用的表达矩阵入口，必须一并取回。
+          python scripts/download_geo.py --dataset "$DATASET_ID" --output inputs/raw/ --no-proxy --smart-size --with-series-matrix
 
       - name: Data availability analysis
         run: |

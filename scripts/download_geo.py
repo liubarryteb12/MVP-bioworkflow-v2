@@ -88,6 +88,9 @@ def main() -> int:
     ap.add_argument("--prefer", default="_RAW.tar", help="优先下载的文件名片段")
     ap.add_argument("--smart-size", action="store_true",
                     help="RAW.tar >300MB 且存在 series matrix 时自动改用表达矩阵（大数据集降载）")
+    ap.add_argument("--with-series-matrix", action="store_true",
+                    help="在首选文件之外额外下载 series matrix（非 Affymetrix 芯片如 Illumina/Agilent "
+                         "不提供 CEL，P1 只能走 series matrix 直连表达矩阵路径）")
     args = ap.parse_args()
 
     proxy = None if args.no_proxy else args.proxy
@@ -171,6 +174,38 @@ def main() -> int:
             log["sources"].append({"source_path": url, "target_path": dst.replace("\\", "/"), "status": "failed",
                                    "error": str(exc)})
             print(f"[{acc}] 下载失败 {name}：{exc}", file=sys.stderr)
+
+    # 非 Affymetrix 芯片（Illumina / Agilent）不提供 CEL，RAW.tar 里也没有能直接跑 RMA 的文件。
+    # 此时 series matrix 是唯一的表达矩阵入口：GEO 保证每个 Series 都有它，且提交者已做标准化。
+    # 只下载、不解压——data_availability.py 需要原始 .gz 来解析表头与表达矩阵。
+    sm_url = f"https://ftp.ncbi.nlm.nih.gov/geo/series/{series_dir(acc)}/{acc}/matrix/{acc}_series_matrix.txt.gz"
+    already_matrix = bool(log["source_base"].rstrip("/").endswith("/matrix"))
+    if args.with_series_matrix and not already_matrix:
+        sm_dst = os.path.join(raw_dir, f"{acc}_series_matrix.txt.gz")
+        try:
+            proxies = {"http": proxy, "https": proxy} if proxy else None
+            with requests.get(sm_url, stream=True, proxies=proxies, timeout=600) as r:
+                r.raise_for_status()
+                with open(sm_dst, "wb") as f:
+                    for chunk in r.iter_content(1 << 20):
+                        if chunk:
+                            f.write(chunk)
+            sm_size = os.path.getsize(sm_dst)
+            log["sources"].append({
+                "source_path": sm_url,
+                "target_path": sm_dst.replace("\\", "/"),
+                "size_bytes": sm_size,
+                "checksum_after": sha256_of(sm_dst),
+                "extracted_files": 0,
+                "status": "success",
+                "note": "series matrix（非 Affy 芯片无 CEL，作为表达矩阵入口）",
+            })
+            print(f"[{acc}] 已下载 series matrix（{sm_size} bytes）")
+        except Exception as exc:
+            log["sources"].append({"source_path": sm_url, "target_path": sm_dst.replace("\\", "/"),
+                                   "status": "failed", "error": str(exc),
+                                   "note": "series matrix 不可用（SuperSeries 或部分数据集无此文件）"})
+            print(f"[{acc}] series matrix 下载失败（不影响主流程）：{exc}", file=sys.stderr)
 
     log["summary"] = {
         "total_files": len(log["sources"]),

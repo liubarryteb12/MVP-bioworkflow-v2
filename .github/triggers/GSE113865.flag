@@ -1,0 +1,11 @@
+dataset: GSE113865
+stage: basic
+requested_at: 2026-09-17T23:00:00+08:00
+requested_by: agent
+rerun: 1
+rerun_reason: 换用用户指定的人源小数据集 GSE113865（TNBC 3 vs 3 配对，GPL10558 人源芯片）
+note: >-
+  第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，
+  平台 GPL10558（Illumina HumanHT-12 V4.0），6 样本（GSM3121915-920），
+  配对设计 3 vs 3。非 Affymetrix、无 CEL，走 series matrix 直连表达矩阵路径；
+  探针 ID 为 ILMN_*，注释库 illuminaHumanv4.db，物种库 org.Hs.eg.db。

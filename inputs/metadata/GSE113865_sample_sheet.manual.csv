@@ -1,0 +1,7 @@
+gsm,group,pair_id,title
+GSM3121915,control,pair_2129,adjacent normal sample 2129
+GSM3121916,tumor,pair_2129,TNBC sample r2129c
+GSM3121917,control,pair_2195,adjacent normal sample r2195n
+GSM3121918,tumor,pair_2195,TNBC sample r2195c
+GSM3121919,control,pair_9984,adjacent normal sample 9984
+GSM3121920,tumor,pair_9984,TNBC sample r9984c
