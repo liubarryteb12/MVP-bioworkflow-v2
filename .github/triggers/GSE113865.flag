@@ -2,12 +2,12 @@ dataset: GSE113865
 stage: basic
 requested_at: 2026-09-17T23:00:00+08:00
 requested_by: agent
-rerun: 3
+rerun: 4
 rerun_reason: >-
-  修复 pathway_enrichment 的 else 换行语法错误后重跑。该错误使 Rscript 在解析到
-  if(...) 后换行 else 时直接 Execution halted，是富集模块静默失败的直接原因
-  （run 35242549385 的 stderr: Error: unexpected 'else' in "else"）。
-  已验证 preprocess(47320x6) 与 differential(94 显著差异, tumor vs control 3v3) 均成功。
+  映射函数加固后重跑。上一轮(run 35244109358)已确认 illuminaHumanv4.db 安装成功、
+  平台识别正确(annotation_db=illuminaHumanv4.db)、94 个显著探针已算出，
+  但 map_ids_to_entrez 里 nrow(res) 在 res 为 NULL 时报 argument is of length zero 而中止。
+  本次改为逐项防御 + 新增 PROBEID->SYMBOL->ENTREZ 中转兜底。
 note: >-
   第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，
   平台 GPL10558（Illumina HumanHT-12 V4.0），6 样本（GSM3121915-920），

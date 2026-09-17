@@ -91,25 +91,64 @@ db <- get(annot_db)
 # 基因 ID → ENTREZ 映射：微阵列用 PROBEID；RNA-seq（如 GSE174263 / Drosophila）的
 # deg_table 多为 FlyBase / Ensembl / 基因符号，需按可用 keytype 逐一尝试。
 map_ids_to_entrez <- function(db, ids) {
-  if (length(ids) == 0) return(data.frame(PROBEID = character(0), ENTREZID = character(0)))
+  empty <- data.frame(PROBEID = character(0), ENTREZID = character(0))
+  if (length(ids) == 0) return(empty)
   avail <- tryCatch(AnnotationDbi::columns(db), error = function(e) character(0))
   for (kt in c("PROBEID", "ENSEMBL", "FLYBASE", "SYMBOL", "ENTREZID")) {
     if (!(kt %in% avail)) next
     res <- tryCatch(
       AnnotationDbi::select(db, keys = as.character(ids), columns = "ENTREZID", keytype = kt),
       error = function(e) NULL)
-    if (is.null(res) || !"ENTREZID" %in% names(res)) next
-    res <- res[!is.na(res$ENTREZID) & res$ENTREZID != "", ]
-    if (nrow(res) > 0) {
-      cat("  mapping keytype used: ", kt, " (", nrow(res), " rows)\n", sep = "")
-      return(res)
+    # 必须逐项防御：select 可能返回 NULL / 非 data.frame / 缺列，
+    # 直接 nrow(res) 会在 res 为 NULL 时报 "argument is of length zero" 并中止整个模块。
+    if (is.null(res) || !is.data.frame(res) || !"ENTREZID" %in% names(res)) {
+      cat("  keytype ", kt, ": unusable\n", sep = "")
+      next
     }
+    res <- res[!is.na(res$ENTREZID) & res$ENTREZID != "", , drop = FALSE]
+    cat("  keytype ", kt, ": ", nrow(res), " mapped rows\n", sep = "")
+    if (nrow(res) > 0) return(res)
   }
-  data.frame(PROBEID = character(0), ENTREZID = character(0))
+  empty
+}
+
+# 兜底：探针 -> SYMBOL -> ENTREZ 中转。
+# 部分芯片库（如 illuminaHumanv4.db）直连 PROBEID->ENTREZID 可能为空，
+# 此时先取 SYMBOL 再用物种库 org.*.eg.db 转 ENTREZ，避免富集因映射为空而作罢。
+map_via_symbol <- function(probe_db, org_pkg, ids) {
+  empty <- data.frame(PROBEID = character(0), ENTREZID = character(0))
+  if (length(ids) == 0) return(empty)
+  avail <- tryCatch(AnnotationDbi::columns(probe_db), error = function(e) character(0))
+  if (!("PROBEID" %in% avail) || !("SYMBOL" %in% avail)) return(empty)
+  s <- tryCatch(AnnotationDbi::select(probe_db, keys = as.character(ids),
+                                      columns = "SYMBOL", keytype = "PROBEID"),
+                error = function(e) NULL)
+  if (is.null(s) || !is.data.frame(s) || !all(c("PROBEID", "SYMBOL") %in% names(s))) return(empty)
+  s <- s[!is.na(s$SYMBOL) & s$SYMBOL != "", , drop = FALSE]
+  if (nrow(s) == 0) return(empty)
+  cat("  symbol pivot: ", nrow(s), " probes -> symbols\n", sep = "")
+  e <- tryCatch(AnnotationDbi::select(get(org_pkg), keys = unique(s$SYMBOL),
+                                      columns = "ENTREZID", keytype = "SYMBOL"),
+                error = function(e) NULL)
+  if (is.null(e) || !is.data.frame(e) || !all(c("SYMBOL", "ENTREZID") %in% names(e))) return(empty)
+  e <- e[!is.na(e$ENTREZID) & e$ENTREZID != "", , drop = FALSE]
+  m <- match(s$SYMBOL, e$SYMBOL)
+  out <- data.frame(PROBEID = s$PROBEID, ENTREZID = e$ENTREZID[m], stringsAsFactors = FALSE)
+  out <- out[!is.na(out$ENTREZID) & out$ENTREZID != "", , drop = FALSE]
+  cat("  symbol pivot: ", nrow(out), " probes -> ENTREZ\n", sep = "")
+  out
 }
 
 map_all <- map_ids_to_entrez(db, deg$probe_id)
+if (nrow(map_all) == 0) {
+  cat("direct mapping empty -> SYMBOL pivot via ", org_db, "\n", sep = "")
+  map_all <- map_via_symbol(db, org_db, deg$probe_id)
+}
 map_sig <- map_ids_to_entrez(db, sig$probe_id)
+if (nrow(map_sig) == 0) {
+  cat("direct mapping empty (sig) -> SYMBOL pivot via ", org_db, "\n", sep = "")
+  map_sig <- map_via_symbol(db, org_db, sig$probe_id)
+}
 universe <- unique(na.omit(map_all$ENTREZID))
 gene <- unique(na.omit(map_sig$ENTREZID))
 cat("universe genes: ", length(universe), "  significant genes: ", length(gene), "\n", sep = "")
