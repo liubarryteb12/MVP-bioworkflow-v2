@@ -120,6 +120,12 @@ jobs:
         run: |
           python scripts/data_availability.py --dataset "$DATASET_ID" --workspace . --no-proxy
 
+      # 探针 → ENTREZ 映射：Bioconductor 芯片库（illuminaHumanv4.db 等）在云端可能装得上
+      # 却映射不出条目，此时用 GEO 官方平台注释表兜底，否则通路富集无从谈起。
+      - name: Fetch platform annotation (probe -> ENTREZ)
+        run: |
+          python scripts/fetch_platform_annot.py --dataset "$DATASET_ID" --workspace . --no-proxy || true
+
       # preprocessCore（affy::rma）在受限容器里 pthread_create 报 EINVAL(22)：
       # 栈限制过小 + 多线程同时创建。先放宽栈限制，再退到单线程。
       - name: Run P1 analysis
@@ -137,6 +143,13 @@ jobs:
           else
             python scripts/run_p1.py --workspace . --dataset "$DATASET_ID"
           fi
+
+      # P1 → P2 → P3 → P4-b 是连着的：P1 一成功就往下接，不允许只停在 P1。
+      # run_p2p3p4.py 读 P1 的 analysis/_index 产出与 P4-a 题材包（04_journal/packages/<DATASET>.yaml）。
+      - name: Run P2 → P3 → P4-b (chained after P1)
+        if: success()
+        run: |
+          python scripts/run_p2p3p4.py .
 
       - name: Guard self-test (P4 checks)
         if: env.RUN_MUTATION == 'true'

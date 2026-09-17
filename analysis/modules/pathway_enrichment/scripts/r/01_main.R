@@ -173,12 +173,30 @@ map_via_symbol <- function(probe_db, org_pkg, ids) {
 }
 
 # 三级兜底：① 芯片库 Bimap（探针→ENTREZ 的设计入口）② select 多 keytype ③ SYMBOL 中转
+# ① GEO 平台注释表（由 fetch_platform_annot.py 产出）：最权威，且不依赖任何 R 包。
+# 芯片注释库在云端可能装得上却映射不出条目，这张表是 Illumina/Agilent 的救命兜底。
+pm_in <- get_in("probe_map")
+map_from_table <- function(ids) {
+  empty <- data.frame(PROBEID = character(0), ENTREZID = character(0))
+  if (length(pm_in) == 0 || is.na(pm_in) || !file.exists(pm_in)) return(empty)
+  pm <- tryCatch(read.csv(pm_in, stringsAsFactors = FALSE), error = function(e) NULL)
+  if (is.null(pm) || !all(c("probe_id", "entrez") %in% names(pm))) return(empty)
+  pm$probe_id <- as.character(pm$probe_id)
+  pm$entrez <- as.character(pm$entrez)
+  pm <- pm[!is.na(pm$entrez) & pm$entrez != "", , drop = FALSE]
+  pm <- pm[pm$probe_id %in% as.character(ids), , drop = FALSE]
+  cat("  probe_map: ", nrow(pm), " / ", length(ids), " probes -> ENTREZ\n", sep = "")
+  if (nrow(pm) == 0) return(empty)
+  data.frame(PROBEID = pm$probe_id, ENTREZID = pm$entrez, stringsAsFactors = FALSE)
+}
+
 map_ids <- function(ids) {
-  m <- map_by_bimap(annot_db, ids)
-  if (nrow(m) == 0) m <- map_ids_to_entrez(db, ids)
+  m <- map_from_table(ids)                            # ① GEO 平台注释表
+  if (nrow(m) == 0) m <- map_by_bimap(annot_db, ids)  # ② 芯片库 Bimap
+  if (nrow(m) == 0) m <- map_ids_to_entrez(db, ids)   # ③ select 多 keytype
   if (nrow(m) == 0) {
     cat("direct mapping empty -> SYMBOL pivot via ", org_db, "\n", sep = "")
-    m <- map_via_symbol(db, org_db, ids)
+    m <- map_via_symbol(db, org_db, ids)               # ④ SYMBOL 中转
   }
   m
 }

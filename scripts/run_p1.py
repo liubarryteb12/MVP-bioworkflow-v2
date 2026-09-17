@@ -826,6 +826,12 @@ def main() -> int:
                         "path": os.path.join("analysis", "outputs", acc, "differential_expression",
                                              "results", "deg_table.csv").replace("\\", "/"),
                         "format": "csv", "required": True}]
+            # 探针 → ENTREZ 映射表（GEO 平台注释；芯片库映射不出条目时的权威替代）
+            probe_map_rel = os.path.join("inputs", "metadata", f"{acc}_probe_map.csv").replace("\\", "/")
+            if os.path.exists(os.path.join(ws, probe_map_rel)):
+                inputs3.append({"name": "probe_map", "path": probe_map_rel,
+                                "format": "csv", "required": False})
+                print(f"[{acc}] 富集附加探针映射表：{probe_map_rel}")
             ij3 = build_input_json(os.path.join(mdir, "run", f"input_{run_id}.json"), run_id, mod, inputs3, outputs3,
                                    {"padj_threshold": 0.05, "log2fc_threshold": 1.0,
                                     "annotation_db": annot_db, "org_db": org_db,

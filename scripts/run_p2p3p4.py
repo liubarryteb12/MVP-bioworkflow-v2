@@ -43,6 +43,21 @@ def dump(path, doc):
         yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
 
 
+def load_direction_package(ws: str) -> dict:
+    """P4-a 题材包按数据集存放（04_journal/packages/{ACC}.yaml）。
+
+    必须按数据集取：题材包写死了 primary_topic，用错数据集的包会给稿件张冠李戴
+    （例如拿肺腺癌的题材包去描述三阴性乳腺癌）。无专属包时回退，并在日志中说明。
+    """
+    p = os.path.join(ws, "04_journal", "packages", f"{ACC}.yaml")
+    d = load(p)
+    if d:
+        print(f"[P4-a] 题材包：04_journal/packages/{ACC}.yaml（数据集专属）")
+        return d
+    print(f"[P4-a] 无 {ACC} 专属题材包，回退 journal_direction_package.yaml（可能属于别的数据集）")
+    return load(os.path.join(ws, "04_journal", "journal_direction_package.yaml")) or {}
+
+
 def w(path, text):
     d = os.path.dirname(path)
     if d:
@@ -58,7 +73,7 @@ def run_p2(ws: str) -> dict:
     idx = os.path.join(ws, "analysis", "_index")
     ev = load(os.path.join(idx, f"p1_to_p2_evidence_{ACC}.yaml")) or {}
     da = load(os.path.join(idx, f"data_availability_{ACC}.yaml")) or {}
-    dp = load(os.path.join(ws, "04_journal", "journal_direction_package.yaml")) or {}
+    dp = load_direction_package(ws)
 
     t21 = "fail" if ev.get("t21_status") == "fail" else str(ev.get("t21_status", "N/A"))
     n_evid = len(ev.get("evidence", []) or [])
@@ -81,24 +96,71 @@ def run_p2(ws: str) -> dict:
         "spelling": "american",
     }, allow_unicode=True, sort_keys=False))
 
+    # 一切措辞从 P1 实际产出取值，绝不写死某数据集的话术
+    da_inputs = da.get("inputs", {}) or {}
+    data_type = da.get("data_type") or "unknown"
+    organism = da_inputs.get("organism")
+    platform_id = da_inputs.get("platform_id")
+    geo_title = da_inputs.get("geo_title")
+    group_sizes = (da.get("group_inference", {}) or {}).get("group_sizes") or {}
+    min_n = min(group_sizes.values()) if group_sizes else None
+    figures = ev.get("figures", []) or []
+    primary_topic = dp.get("topic_judgment", {}).get("primary_topic") or geo_title or "-"
+    secondary_topic = dp.get("topic_judgment", {}).get("secondary_topic") or "-"
+
+    if t21 == "fail":
+        headline = (f"在 {primary_topic} 主题下，本轮 P1 仅产出描述性证据"
+                    f"（n={da.get('sample_size')}，分组 {group_sizes}），**不构成可发表的统计主张**；"
+                    f"升 L2 的前置条件是补样本至每组 n>=3（P1-QC-04 下限）后重跑 P1。")
+        chain_p1 = "**暂缺**（T21 FAIL，不允许提出统计主张）"
+        chain_p2 = f"描述性 QC {n_figs} 张（见下方图序，路径取自 P1 实际产出）"
+        chain_p3 = f"样本量不足（最小组 n={min_n}）；无独立验证"
+        chain_p4 = "补样本后重跑 P1 的完整统计链路"
+    else:
+        headline = (f"在 {primary_topic} 主题下，本轮 P1 已完成 {data_type} 分析"
+                    f"（n={da.get('sample_size')}，分组 {group_sizes}，物种 {organism}，平台 {platform_id}）；"
+                    f"统计推断成立，可进入 Results 写作；"
+                    f"升 L2 的前置条件是用户补齐 8 项定制需求（目标期刊/故事线/证据边界等）。")
+        chain_p1 = f"见下方证据条目（{n_evid} 条，全部锚定 P1 产出文件）"
+        chain_p2 = f"P1 产出图 {n_figs} 张（见下方图序，路径取自 P1 实际产出）"
+        chain_p3 = f"最小组 n={min_n}，统计效力有限；无独立验证队列"
+        chain_p4 = "补充外部验证集与实验验证"
+
+    fig_lines = "\n".join(f"- Figure {i + 1} [占位] -> 源：{f.get('path')}"
+                          for i, f in enumerate(figures)) or "- （本轮无 P1 产出图）"
+    ev_boundary = "探索性"
+    # 图/表目录一律从 P1 实际产出路径推导，不写死 rnaseq_de 等模块名
+    fig_dir = (os.path.dirname(str(figures[0].get("path", ""))).replace("\\", "/") + "/") if figures else ""
+    tbl_dir = ""
+    for _e in ev.get("evidence", []) or []:
+        _rp = _e.get("result_file")
+        if _rp:
+            tbl_dir = os.path.dirname(str(_rp)).replace("\\", "/") + "/"
+            break
+    if not tbl_dir:
+        for _t in ev.get("tables", []) or []:
+            _tp = _t.get("path")
+            if _tp:
+                tbl_dir = os.path.dirname(str(_tp)).replace("\\", "/") + "/"
+                break
+
     outline = f"""> 输出级别：{level}
 > 待定制项：目标期刊、故事线偏好、证据边界、图数上限、篇幅与截止
 > 下一步：用户填完 8 项定制需求后升 L2
-> T21 状态：{t21}（{ACC} 每组样本量 < 6，差异表达与富集已被 P1 质控门控阻断）
+> T21 状态：{t21}（分组 {group_sizes}；P1-QC-04 每组 ≥3）
+> 数据：{data_type} / {organism} / {platform_id}
 
 # 分级大纲（{ACC}）
 
 ## 一句话卖点
-在 {dp.get('topic_judgment', {}).get('primary_topic', '-')} 主题下，
-本轮 P1 仅产出描述性证据（n={da.get('sample_size')}，组间样本量不足），**不构成可发表的统计主张**；
-升 L2 的前置条件是补样本至每组 n>=6 后重跑 P1。
+{headline}
 
 ## 链条顺序（P0–P4 逻辑链）
-- P0 背景问题：{dp.get('topic_judgment', {}).get('secondary_topic', '-')} 的表达调控尚不清楚
-- P1 主发现：**暂缺**（T21 FAIL，不允许提出统计主张）
-- P2 支撑证据：描述性 QC {n_figs} 张（library size / 相关性 / PCA）
-- P3 局限：样本量不足（每组 n<6）；无独立验证
-- P4 展望：补样本后走 DESeq2 + 富集完整链路
+- P0 背景问题：{secondary_topic} 的表达调控尚不清楚
+- P1 主发现：{chain_p1}
+- P2 支撑证据：{chain_p2}
+- P3 局限：{chain_p3}
+- P4 展望：{chain_p4}
 
 ## 各节要点（骨架，不铺陈）
 - Introduction：背景 2-3 要点；gap statement 1 条（然而/尚未）
@@ -108,11 +170,9 @@ def run_p2(ws: str) -> dict:
 - Declarations：8 项齐全（不适用写 Not applicable）
 
 ## 图序占位
-- Figure 1 [占位：library size] -> 源：analysis/outputs/{ACC}/rnaseq_de/figures/qc_libsize.pdf
-- Figure 2 [占位：sample correlation] -> 源：qc_correlation.pdf
-- Figure 3 [占位：PCA] -> 源：qc_pca.pdf
+{fig_lines}
 
-## 主张-锚对应（主张强度 <= 证据上限 = 探索性）
+## 主张-锚对应（主张强度 <= 证据上限 = {ev_boundary}）
 """
     for e in ev.get("evidence", []) or []:
         outline += f"- [{e.get('evidence_id')}] {e.get('claim')}\n  锚：{e.get('result_file')}\n"
@@ -126,7 +186,8 @@ def run_p2(ws: str) -> dict:
         "claims": [{"claim_id": e.get("evidence_id"), "text": e.get("claim"),
                     "anchor": e.get("result_file"), "strength": "描述性（非统计）"}
                    for e in ev.get("evidence", []) or []],
-        "blocked_claims": [{"reason": f"T21 {t21}", "note": "差异表达/富集主张全部禁止"}],
+        "blocked_claims": ([] if t21 != "fail" else
+                           [{"reason": f"T21 {t21}", "note": "差异表达/富集主张全部禁止"}]),
     })
 
     dump(os.path.join(ws, "02_writing", "p2_to_p3_manuscript.yaml"), {
@@ -138,8 +199,8 @@ def run_p2(ws: str) -> dict:
                                    "declarations", "references"]},
         "files": {"manuscript": "02_writing/p2_outline.md",
                   "refs": "02_writing/refs/refs.bib",
-                  "figures_dir": f"analysis/outputs/{ACC}/rnaseq_de/figures/",
-                  "tables_dir": f"analysis/outputs/{ACC}/rnaseq_de/results/"},
+                  "figures_dir": fig_dir or f"analysis/outputs/{ACC}/",
+                  "tables_dir": tbl_dir or f"analysis/outputs/{ACC}/"},
         "figures": [{"figure_id": f"fig{i+1}", "file": f["path"], "caption": "[占位]",
                      "position_hint": "results"}
                     for i, f in enumerate(ev.get("figures", []) or [])],
@@ -170,8 +231,12 @@ def run_p2(ws: str) -> dict:
                              "secondary_topic": dp.get("topic_judgment", {}).get("secondary_topic"),
                              "potential_journals": dp.get("journal_direction", {}).get("candidate_directions", [])},
         "strengths": ["流程可复现（随机种子固定）", "守卫与质控记录完整"],
-        "weaknesses": [f"T21 {t21}：每组样本量不足", "无统计主张可写", "无实验验证"],
-        "recommendations": ["补样本至每组 n>=6 后重跑 P1", "补样本后再升 L2 写作"],
+        "weaknesses": ([f"T21 {t21}：每组样本量不足", "无统计主张可写", "无实验验证"]
+                       if t21 == "fail" else
+                       [f"最小组 n={min_n}，统计效力有限", "无独立验证队列", "无实验验证"]),
+        "recommendations": (["补样本至每组 n>=3（P1-QC-04 下限）后重跑 P1", "补样本后再升 L2 写作"]
+                            if t21 == "fail" else
+                            ["补充外部验证集", "补齐 8 项定制需求后升 L2 并走 WP-1~9"]),
     })
 
     dump(os.path.join(ws, "02_writing", "review", "review_summary.yaml"), {
@@ -183,7 +248,9 @@ def run_p2(ws: str) -> dict:
         ],
         "summary": {"total_major": 1, "total_minor": 1, "total_info": 1,
                     "passed_models": 3, "failed_models": 0, "overall": "passed_with_conditions"},
-        "action": ["major(统计学家)：当前不得进入正文写作，等补样本后重跑 P1", ],
+        "action": [("major(统计学家)：当前不得进入正文写作，等补样本后重跑 P1"
+                    if t21 == "fail" else
+                    f"minor(统计学家)：T21 {t21}，统计推断成立；升 L2 前需补齐 8 项定制需求")],
         "next": ["用户补样本或确认降级路线"],
     })
 
@@ -255,16 +322,37 @@ def run_p3(ws: str, p2: dict) -> None:
 def run_p4b(ws: str, p2: dict) -> None:
     jdir = os.path.join(ws, "04_journal")
     t21 = p2["t21"]
+    idx = os.path.join(ws, "analysis", "_index")
+    da = load(os.path.join(idx, f"data_availability_{ACC}.yaml")) or {}
+    dp = load_direction_package(ws)
+    organism = (da.get("inputs", {}) or {}).get("organism")
+    geo_title = (da.get("inputs", {}) or {}).get("geo_title")
+    primary_topic = dp.get("topic_judgment", {}).get("primary_topic") or geo_title or ""
+    topic_blob = f"{primary_topic} {geo_title or ''}".lower()
+    is_human = str(organism).lower().startswith("homo sapiens")
+    onco = any(k in topic_blob for k in ("tumor", "tumour", "cancer", "carcinoma",
+                                         "tnbc", "breast", "oncolog"))
 
     # 匹配评分（权重：scope/tier 高 0.25，format/policy 中 0.15，oa/apc 低 0.10；总分=加权平均）
-    candidates = [
-        {"journal_id": "bmc_genomics", "name": "BMC Genomics", "publisher": "BMC",
-         "scores": {"scope_fit": 8, "tier_fit": 6, "format_fit": 9, "policy_fit": 9, "oa_fit": 10, "apc_fit": 6},
-         "reason": "数据描述性/方法透明类接受度高；当前样本量不足，仅条件性推荐"},
-        {"journal_id": "g3", "name": "G3: Genes|Genomes|Genetics", "publisher": "GSA",
-         "scores": {"scope_fit": 7, "tier_fit": 6, "format_fit": 8, "policy_fit": 8, "oa_fit": 9, "apc_fit": 6},
-         "reason": "果蝇遗传学受众匹配；同样以补样本为前置条件"},
-    ]
+    # 候选期刊必须按物种与主题选，不能沿用上一轮数据集的受众（此前写死"果蝇遗传学"）。
+    if onco and is_human:
+        candidates = [
+            {"journal_id": "breast_cancer_res", "name": "Breast Cancer Research", "publisher": "BMC",
+             "scores": {"scope_fit": 9, "tier_fit": 8, "format_fit": 9, "policy_fit": 8, "oa_fit": 10, "apc_fit": 4},
+             "reason": f"主题（{primary_topic}）与乳腺癌/肿瘤方向高度契合；须待 P2 成稿后投稿"},
+            {"journal_id": "bmc_cancer", "name": "BMC Cancer", "publisher": "BMC",
+             "scores": {"scope_fit": 9, "tier_fit": 6, "format_fit": 9, "policy_fit": 9, "oa_fit": 10, "apc_fit": 5},
+             "reason": "肿瘤学广谱刊，对样本量较小但方法透明的组学研究接受度较高"},
+        ]
+    else:
+        candidates = [
+            {"journal_id": "bmc_genomics", "name": "BMC Genomics", "publisher": "BMC",
+             "scores": {"scope_fit": 8, "tier_fit": 6, "format_fit": 9, "policy_fit": 9, "oa_fit": 10, "apc_fit": 6},
+             "reason": "组学数据/方法透明类接受度高"},
+            {"journal_id": "sci_rep", "name": "Scientific Reports", "publisher": "Springer Nature",
+             "scores": {"scope_fit": 7, "tier_fit": 6, "format_fit": 8, "policy_fit": 8, "oa_fit": 9, "apc_fit": 6},
+             "reason": "学科广谱，样本量有限时的常规落点"},
+        ]
     for c in candidates:
         s, wmap = c["scores"], {"scope_fit": .25, "tier_fit": .25, "format_fit": .15,
                                 "policy_fit": .15, "oa_fit": .10, "apc_fit": .10}
@@ -280,7 +368,10 @@ def run_p4b(ws: str, p2: dict) -> None:
     ranked = sorted(candidates, key=lambda c: -c["total_score"])
     dump(os.path.join(jdir, "recommended_journals.yaml"), {
         "timestamp": TS, "stage": "P4-b", "conditional": True,
-        "recommendation_note": "当前稿件无统计主张（T21 FAIL），以下为【补样本后】的条件性推荐，非立即投稿建议",
+        "recommendation_note": ("当前稿件无统计主张（T21 FAIL），以下为【补样本后】的条件性推荐，非立即投稿建议"
+                                if t21 == "fail" else
+                                "P1 统计推断成立；但 P2 仍为 L1 骨架（无正文实体），"
+                                "以下为【成稿后】的推荐，非立即投稿建议"),
         "recommended": [
             {"rank": i + 1, "journal_id": c["journal_id"], "name": c["name"],
              "publisher": c["publisher"], "tier": "Q2-Q3",
@@ -318,10 +409,17 @@ def run_p4b(ws: str, p2: dict) -> None:
     dump(os.path.join(jdir, "feedback.yaml"), {
         "timestamp": TS,
         "feedback": [
-            {"target": "P1", "reason": f"T21 {t21}：每组样本量 < 6，统计推断被门控",
-             "action": "补充样本至每组 n>=6 后重跑 P1（DESeq2 + 富集）", "blocking": True},
+            {"target": "P1",
+             "reason": (f"T21 {t21}：每组样本量未达 P1-QC-04 下限，统计推断被门控"
+                        if t21 == "fail" else
+                        f"T21 {t21}：统计推断成立，但效力受最小组样本量限制"),
+             "action": ("补充样本至每组 n>=3 后重跑 P1"
+                        if t21 == "fail" else "补充独立验证队列以提升统计效力"),
+             "blocking": t21 == "fail"},
             {"target": "P2", "reason": "当前只能维持 L1 骨架",
-             "action": "等 P1 补齐统计证据后升 L2 走 WP-1~9", "blocking": True},
+             "action": ("等 P1 补齐统计证据后升 L2 走 WP-1~9"
+                        if t21 == "fail" else "补齐 8 项定制需求后升 L2 走 WP-1~9"),
+             "blocking": True},
             {"target": "P3", "reason": "无正文实体",
              "action": "等 P2 L2 成稿后套模板排版并跑排版守卫", "blocking": False},
         ],
@@ -333,7 +431,8 @@ def run_p4b(ws: str, p2: dict) -> None:
                          "clinical_value": "low", "topic_heat": "medium", "competition": "medium"},
         "p4b_measured": {
             "narrative_completeness": "low", "evidence_consistency": "high",
-            "method_rigor": "high", "statistical_validity": "low",
+            "method_rigor": "high",
+            "statistical_validity": "low" if t21 == "fail" else "medium",
             "writing_quality": "low", "figure_quality": "medium",
             "novelty": "medium", "clinical_value": "low"},
         "comparison": [

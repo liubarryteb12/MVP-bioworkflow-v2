@@ -1,0 +1,103 @@
+# P4-a 期刊方向包 —— GSE113865（第二版当前数据集 · 人源小数据量）
+# 依据：00.总框架固定/02版（修订合集 v3，唯一真源）
+# 元数据来源：GEO FTP 的 GSE113865_family.soft.gz（NCBI 网页被 reCAPTCHA 拦，
+#             改走 FTP；留痕 04_journal/snapshots/geo_meta/GSE113865_brief.txt）
+
+package_id: jdp_gse113865_20260917
+timestamp: 2026-09-17T23:00:00+08:00
+stage: P4-a
+status: confirmed
+confirmed_by: auto_e2e
+confirmation_note: 端到端验证模式下由 agent 代确认；真实投稿前必须由用户确认
+
+inputs:
+  dataset_id: GSE113865
+  geo_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE113865&targ=self&form=text&view=brief
+  snapshot: 04_journal/snapshots/geo_meta/GSE113865_meta.yaml
+  fetched_at: 2026-09-17T23:00:00+08:00
+  deviation_from_input_material: []
+
+topic_judgment:
+  primary_topic: 三阴性乳腺癌（TNBC）组织与配对癌旁正常组织的基因表达差异
+  secondary_topic: TNBC 分子分型与潜在驱动通路
+  study_type: 肿瘤 vs 配对癌旁正常对照芯片表达谱差异分析（生信，无实验验证）
+  novelty_level: medium
+  data_type: microarray
+  sample_size: 6
+  group_balance: 3 tumor vs 3 配对癌旁正常（恰好达 P1-QC-04 下限 ≥3，附小样本 warning）
+
+journal_direction:
+  candidate_directions:
+    - 乳腺癌转化研究与分子标志物
+    - 肿瘤学（乳腺方向）
+    - 生物信息学与转化医学
+  target_tier: Q2-Q3
+  likely_publishers:
+    - BMC
+    - Springer Nature
+    - Elsevier
+  excluded:
+    - direction: Nature 系 / Cell 系
+      reason: 无机制实验、无独立功能验证，纯公共数据重分析，且 n=3 vs 3 效力有限
+    - direction: 方法学期刊
+      reason: 沿用 limma + GO/KEGG 既定流程，无方法学增量
+
+analysis_requirements:
+  required_modules:
+    - expression_qc            # series matrix 直连时以表达分布检查为标准化证据（QC-08）
+    - differential_expression_limma
+    - pathway_enrichment
+  optional_modules:
+    - pca
+    - heatmap
+    - survival_analysis        # 本数据集无临床随访信息，不可用
+  minimum_evidence:
+    - 差异基因表（logFC + BH FDR）
+    - 火山图 + 富集结果
+  data_requirements:
+    - 每组样本量 ≥3（实测 3/3，恰好满足，须在局限中声明效力有限）
+    - 探针注释：GPL10558 为 Illumina HumanHT-12 V4.0，探针 ID 形如 ILMN_*，
+      注释走 GEO 平台表 GPL10558.annot.gz（Bioconductor illuminaHumanv4.db 在本环境映射不出条目）
+  constraints_from_02_spec:
+    - "P1-QC-04：每组 ≥3（02版修订合集 v3，旧 T21 n≥6 废止）"
+    - "P1-QC-08：series matrix 直连时以表达分布检查为标准化证据，如实备注不伪造步骤"
+    - "非 Affymetrix 平台无 CEL，不得套用 RMA；提交者已做 log2 + quantile 标准化"
+
+writing_constraints:
+  structure: S1
+  abstract_type: structured
+  abstract_limit: 350
+  keywords_count: 3-10
+  reference_style: Vancouver
+  reference_limit: 60
+  figure_limit: 8
+  table_limit: 4
+  language: English
+  audience: 乳腺癌 / 肿瘤学 / 生信交叉
+  story_type: data-driven
+  evidence_boundary: 候选
+
+typesetting_constraints:
+  publisher_system: BMC
+  template: 官方模板或通用安全格式
+  line_spacing: double
+  line_numbers: required
+  figure_width_single: 85
+  figure_width_double: 160        # 02版 §30 / 断言 A-01：双栏 170→160
+  figure_format: five
+
+risks:
+  - 样本量极小（3 vs 3），统计效力有限，任何显著结论都须在局限中声明
+  - 公共数据重分析，创新性取决于解读与配对设计（配对可部分抵消个体差异）
+  - 无实验验证，主张上限 = 候选
+  - Illumina 平台探针注释覆盖率低于 Affy，富集基因集可能偏小
+
+uncertainties:
+  - 目标期刊最终确定
+  - 是否补充外部验证集（如 TCGA-BRCA 三阴性亚型）
+
+pending_items:
+  - 目标期刊
+  - 故事线偏好
+  - 证据边界
+  - 图数上限
