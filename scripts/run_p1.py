@@ -544,7 +544,8 @@ def main() -> int:
     else:
         # 微阵列仅支持 Affymetrix CEL。Agilent/Illumina 表达矩阵需 limma::read.maimages 流程（待扩展，登记）。
         n_cel = (da.get("inputs", {}) or {}).get("n_cel_files", 0) or 0
-        if not n_cel:
+        series_expr = (da.get("inputs", {}) or {}).get("series_matrix_expr")
+        if not n_cel and not series_expr:
             platform_id = (da.get("inputs", {}) or {}).get("platform_id", "?")
             reason = (f"平台 {platform_id} 未提供 Affymetrix CEL 文件（Agilent/Illumina 表达矩阵），"
                       f"当前 P1 预装流程仅支持 Affy CEL；limma::read.maimages 流程登记为待扩展，"
