@@ -2,12 +2,12 @@ dataset: GSE113865
 stage: basic
 requested_at: 2026-09-18T00:00:00+08:00
 requested_by: agent
-rerun: 6
+rerun: 7
 rerun_reason: >-
-  三件事一起上：① 接入 GEO 平台注释表 GPL10558.annot.gz（7.3MB，含 ID/Gene symbol/Gene ID），
-  解决 illuminaHumanv4.db 在云端装得上却映射不出条目、导致富集判空的问题；
-  ② P1 成功后串联 P2→P3→P4-b（此前 workflow 只跑 P1，四部分没接起来）；
-  ③ 修 run_p2p3p4.py 的硬编码话术与 P4-a 题材包错配。
+  修复探针 ID 被行名覆盖的根因后重跑。deg_table 自带 probe_id 列（ILMN_*），
+  但原代码无条件 deg$probe_id <- rownames(deg)，行名是 1..n，
+  于是拿"1、2、3…"当基因 ID 查询并被 ENTREZID 命中——这正是此前 100% 覆盖率假富集的来源。
+  修好后 probe_map（31266 探针有 Entrez）才能匹配上，富集应产出真实 GO/KEGG 结果。
 note: >-
   第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，
   平台 GPL10558（Illumina HumanHT-12 V4.0），6 样本（GSM3121915-920），

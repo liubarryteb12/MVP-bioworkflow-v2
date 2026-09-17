@@ -55,11 +55,15 @@ deg <- read.csv(get_in("deg_table"), stringsAsFactors = FALSE)
 # 基因 ID 列：DESeq2 为 gene_id；limma 多为行名或 id
 # 注意：else 必须与 } 同行。Rscript 按块解析，换行写 else 会直接报
 # "unexpected 'else' in \"else\"" 并 Execution halted（本模块此前即因此静默失败）。
+# 注意顺序：limma 产出的 deg_table 自带 probe_id 列（ILMN_* / 探针集），
+# 必须优先保留——早期版本无条件用 rownames(deg) 覆盖，行名是 1..n，
+# 于是拿"1、2、3…"当基因 ID 去查，恰好被 ENTREZID 命中，
+# 产出过一批 100% 覆盖率的假富集。只有确实没有这些列时才退回行名。
 if ("gene_id" %in% names(deg)) {
   deg$probe_id <- deg$gene_id
 } else if ("id" %in% names(deg)) {
   deg$probe_id <- deg$id
-} else {
+} else if (!"probe_id" %in% names(deg)) {
   deg$probe_id <- rownames(deg)
 }
 # 显著性列：兼容 DESeq2(padj / log2FoldChange) 与 limma(adj.P.Val / logFC)
