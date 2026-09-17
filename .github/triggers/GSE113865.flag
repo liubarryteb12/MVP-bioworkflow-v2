@@ -2,8 +2,11 @@ dataset: GSE113865
 stage: basic
 requested_at: 2026-09-17T23:00:00+08:00
 requested_by: agent
-rerun: 1
-rerun_reason: 换用用户指定的人源小数据集 GSE113865（TNBC 3 vs 3 配对，GPL10558 人源芯片）
+rerun: 2
+rerun_reason: >-
+  富集模块修复后重跑：此前 pathway_enrichment 只用 requireNamespace 未 library()，
+  get(annot_db) 报 object not found 静默失败。上一次 run(35242549385) 已验证
+  preprocess(47320x6, series matrix 直连) 与 differential(94 显著差异, tumor vs control 3v3) 均成功。
 note: >-
   第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，
   平台 GPL10558（Illumina HumanHT-12 V4.0），6 样本（GSM3121915-920），
