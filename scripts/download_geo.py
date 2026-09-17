@@ -64,6 +64,12 @@ def extract(archive: str, dest: str) -> list:
     elif zipfile.is_zipfile(archive):
         with zipfile.is_zipfile(archive) and zipfile.ZipFile(archive) as zf:
             zf.extractall(dest)
+    elif archive.lower().endswith(".gz"):
+        # 单文件 gzip（如 series matrix）：真正解压，而不是原样复制
+        import gzip
+        out = os.path.join(dest, os.path.basename(archive)[:-3])
+        with gzip.open(archive, "rb") as fi, open(out, "wb") as fo:
+            shutil.copyfileobj(fi, fo)
     else:
         shutil.copy2(archive, os.path.join(dest, os.path.basename(archive)))
     out = []

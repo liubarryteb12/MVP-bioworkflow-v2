@@ -186,8 +186,12 @@ def main() -> int:
 
     # 大数据集降载：series matrix 直出表达矩阵（提交者已处理/RMA），供 limma 直连
     series_expr = None
-    sm_gz = os.path.join(raw_dir, f"{acc}_series_matrix.txt.gz")
-    if data_type == "microarray" and n_cel == 0 and os.path.exists(sm_gz):
+    sm_gz = None
+    for _r, _d, _fs in os.walk(raw_dir):
+        for _fn in _fs:
+            if _fn.lower() == f"{acc.lower()}_series_matrix.txt.gz":
+                sm_gz = os.path.join(_r, _fn)
+    if data_type == "microarray" and n_cel == 0 and sm_gz:
         try:
             import csv as _csv
             import gzip as _gz
