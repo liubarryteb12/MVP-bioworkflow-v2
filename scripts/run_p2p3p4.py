@@ -79,8 +79,9 @@ def run_p2(ws: str) -> dict:
     n_evid = len(ev.get("evidence", []) or [])
     n_figs = len(ev.get("figures", []) or [])
 
-    # 输出级别判定：定制需求 8 项未填 → L1（有研究问题+数据概况，但无完整定制）
-    level = "L1"
+    # 输出级别：正文实体已产出（见 write_manuscript）→ L2；
+    # 但 8 项定制需求未填，目标期刊相关项仍需用户补齐后回灌。
+    level = "L2"
 
     w(os.path.join(ws, "02_writing", "p2_config.yaml"), yaml.safe_dump({
         "project_id": f"project_v2_e2e_{ACC.lower()}",

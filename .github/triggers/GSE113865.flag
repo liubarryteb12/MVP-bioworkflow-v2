@@ -2,16 +2,12 @@ dataset: GSE113865
 stage: basic
 requested_at: 2026-09-18T01:00:00+08:00
 requested_by: agent
-rerun: 9
+rerun: 10
 rerun_reason: >-
-  按出图标准重做全部图件 + 补上文稿交付物。① 新增 analysis/modules/_shared/fig_style.R，
-  按 02版 P1 §11.2/§11.3 统一出图（85/160 mm、Arial 8pt、线宽 ≤1pt、色盲友好、
-  图内无图题无图注无网格），四个作图点（qc_boxplot/qc_density/volcano/enrich_plot）全部重画：
-  火山图补齐阈值线+上调下调数量+图例，富集图由 barplot 改为气泡图（基因数=气泡大小、
-  fold enrichment=颜色、双图例）；位图分辨率 600→1200 dpi（线条图要求）；装 fonts-liberation
-  保证图内字体为 Arial 度量兼容并可嵌入。② 补文稿：P2 新增 write_manuscript 产出真实正文
-  （Abstract/Intro/Methods/Results/Discussion/Declarations/References，数字全部读自 P1 产出），
-  P3 新增 render_manuscript.py 出 docx 并转 pdf（A4、2.54cm、1.5 倍行距、图注 1.0 倍行距）。
+  收口：修正 P2 输出级别标签与正文实体不一致（已产出正文却仍标 L1）。上一轮
+  (run 35293765454) 已验证：① 图幅达标——火山图/箱线图/密度图 84.7×69.8 mm（单栏 85mm）、
+  富集图 159.8×109.7 mm（双栏 160mm），全部 1200 dpi；② 文稿交付物已生成——
+  03_typesetting/output/A/manuscript_v1.docx 与 .pdf。
 note: >-
   第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，平台 GPL10558，
   6 样本（GSM3121915-920），配对设计 3 vs 3。
