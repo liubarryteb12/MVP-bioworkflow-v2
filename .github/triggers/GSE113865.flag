@@ -1,13 +1,21 @@
 dataset: GSE113865
 stage: basic
-requested_at: 2026-09-18T01:00:00+08:00
+requested_at: 2026-09-18T02:00:00+08:00
 requested_by: agent
-rerun: 10
+rerun: 11
 rerun_reason: >-
-  收口：修正 P2 输出级别标签与正文实体不一致（已产出正文却仍标 L1）。上一轮
-  (run 35293765454) 已验证：① 图幅达标——火山图/箱线图/密度图 84.7×69.8 mm（单栏 85mm）、
-  富集图 159.8×109.7 mm（双栏 160mm），全部 1200 dpi；② 文稿交付物已生成——
-  03_typesetting/output/A/manuscript_v1.docx 与 .pdf。
+  按 02版 P3 规范补全排版（此前只做了半截 A 路，未读规范）。本次改动：
+  ① §2.4 排版双路径默认 A_B：A 路 .md→docx→pdf，B 路 .md→latex→pdf，两路各自产稿与 PDF；
+     A 路产物改名对齐规范 —— output/A/manuscript.docx（审稿版）、manuscript_排版核对版.docx（安全版）、
+     manuscript.pdf、submission_package.zip；B 路 output/B/main.tex → manuscript.pdf + zip。
+  ② §8 双轨：审稿版双倍行距+连续行号；安全版 1.5 倍+无行号。
+  ③ §9.1 Word 参数：Times New Roman 12pt、A4、四边 2.5cm（不是 2.54，否则版心 159.2mm 与 T3 的 160mm 冲突）、
+     左对齐、页脚居中 PAGE 域。
+  ④ §10.1 表格改为原生 Word 三线表（此前 Table Grid 带竖线，违反 T58/T59）。
+  ⑤ §3.1③ 参考文献一条一段 + 悬挂缩进。
+  ⑥ P3-PATH-90：两路 manifest 记 source_md_sha256；P3-PATH-91：比对两路图数/表数/引用条数。
+  ⑦ p3_config.yaml 补齐 path_routing / latex_engine / constraints_from_p4a / tracks 等字段。
+  ⑧ 修图片路径解析（md 记的是 workspace 相对路径，此前按 md 目录拼接导致插图全部缺图）。
 note: >-
   第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，平台 GPL10558，
   6 样本（GSM3121915-920），配对设计 3 vs 3。

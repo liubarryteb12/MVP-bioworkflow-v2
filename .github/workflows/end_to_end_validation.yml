@@ -85,8 +85,9 @@ jobs:
           # fonts-liberation：Arial 的度量兼容替代（Linux 无真 Arial）；
           # fontconfig 的 fc-list 供 R 出图时探测可用字体，保证图内字体统一且可嵌入。
           sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev libpng-dev libjpeg-dev poppler-utils fontconfig fonts-liberation
-          # libreoffice-writer：把 P3 的 docx 转成 pdf（用户要的稿件交付物）
-          sudo apt-get install -y --no-install-recommends libreoffice-writer
+          # libreoffice-writer：A 路 docx → pdf；texlive-xetex：B 路 .tex → pdf
+          # （P3 §2.4 要求 A/B 双路各自产稿与 PDF，不因另一路存在而免检）
+          sudo apt-get install -y --no-install-recommends libreoffice-writer texlive-xetex texlive-latex-recommended
           fc-list : family | sort -u | head -20
           which soffice || which libreoffice || echo "WARN: LibreOffice 不可用，pdf 将缺失"
 

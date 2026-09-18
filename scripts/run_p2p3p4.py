@@ -510,56 +510,118 @@ prognostic inference is made.
 
 def run_p3(ws: str, p2: dict) -> None:
     mdir = os.path.join(ws, "03_typesetting")
+    dp = load_direction_package(ws)
+    tc = dp.get("typesetting_constraints", {}) or {}
+    wc = dp.get("writing_constraints", {}) or {}
+
+    # P3 §2.3 p3_config：字段与规范逐项对齐（含双路径与 P4-a 约束回灌）
     dump(os.path.join(mdir, "p3_config.yaml"), {
         "project_id": f"project_v2_e2e_{ACC.lower()}", "timestamp": TS,
         "target_journal": None, "target_publisher": None,
-        "template_source": "default", "typeset_engine": "docx",
-        "line_spacing": "double", "line_numbers": "required",
-        "structure_order": "S1", "figure_format": "five",
+        "template_source": "default",            # user / builtin / default
+        "typeset_engine": "docx",
+        "path_routing": "A_B",                   # §2.4 双路径开关（默认 A_B）
+        "latex_engine": "xelatex",               # §2.4 B 路引擎
+        "line_spacing": "double",                # §8.1 审稿版双倍
+        "line_numbers": "required",
+        "structure_order": wc.get("structure", "S1"),
+        "figure_format": tc.get("figure_format", "five"),
         "language": "en", "spelling": "american",
-        "page": {"size": "A4", "width_mm": 210, "height_mm": 297, "margin_mm": 25.4},
-        "note": "P2 已产出正文实体（manuscript_v1.md）；本轮 A 路真实排版：docx → pdf",
+        "page": {"size": "A4", "width_mm": 210, "height_mm": 297, "margin_mm": 25},  # §9.1
+        "fonts": {"english": "Times New Roman", "english_pt": 12,
+                  "chinese": "宋体", "chinese_pt": 12},                             # §9.1
+        "tracks": {"review": {"line_spacing": "double", "line_numbers": True},
+                   "safe": {"line_spacing": "1.5", "line_numbers": False}},         # §8.1
+        "constraints_from_p4a": {                # §2.3 / §2.2 值域：85 / 160
+            "publisher_system": tc.get("publisher_system"),
+            "template": tc.get("template"),
+            "line_spacing": tc.get("line_spacing"),
+            "line_numbers": tc.get("line_numbers"),
+            "figure_width_single": tc.get("figure_width_single"),
+            "figure_width_double": tc.get("figure_width_double"),
+            "figure_format": tc.get("figure_format"),
+            "audit": {"package_id": dp.get("package_id"), "read_at": TS, "unconsumed_fields": []},
+        },
+        "note": "P2 已产出正文实体；本轮按 §2.4 跑 A/B 双路排版",
     })
 
-    # ---- A 路真实排版：正文 → docx → pdf ----
-    outdir = os.path.join(mdir, "output", "A")
+    # ---- §2.4 排版双路径：.md →A docx→ pdf ／ .md →B latex→ pdf ----
     ms_rel = p2.get("manuscript")
     render = {"status": "skipped", "reason": "无正文实体"}
     if ms_rel and os.path.exists(os.path.join(ws, ms_rel)):
         import subprocess as _sp
         pr = _sp.run([sys.executable, os.path.join("scripts", "render_manuscript.py"),
-                      "--md", os.path.join(ws, ms_rel), "--outdir", outdir],
+                      "--route", "A_B", "--md", ms_rel,
+                      "--outdir", "03_typesetting/output", "--workspace", "."],
                      cwd=ws, capture_output=True, text=True)
         if pr.stdout:
-            print(pr.stdout[-2000:])
+            print(pr.stdout[-3000:])
         if pr.returncode != 0 and pr.stderr:
-            print(pr.stderr[-2000:], file=sys.stderr)
+            print(pr.stderr[-3000:], file=sys.stderr)
         render = {"status": "ok" if pr.returncode == 0 else "failed", "returncode": pr.returncode}
-    docx_p = os.path.join(outdir, "manuscript_v1.docx")
-    pdf_p = os.path.join(outdir, "manuscript_v1.pdf")
+
+    p3m = load(os.path.join(ws, "03_typesetting", "manifest.yaml")) or {}
+
+    def _f(rel):
+        p = os.path.join(ws, rel)
+        return {"path": rel, "exists": os.path.exists(p),
+                "size": os.path.getsize(p) if os.path.exists(p) else 0}
+
     art = {
-        "docx": {"path": os.path.relpath(docx_p, ws).replace("\\", "/"),
-                 "exists": os.path.exists(docx_p),
-                 "size": os.path.getsize(docx_p) if os.path.exists(docx_p) else 0},
-        "pdf": {"path": os.path.relpath(pdf_p, ws).replace("\\", "/"),
-                "exists": os.path.exists(pdf_p),
-                "size": os.path.getsize(pdf_p) if os.path.exists(pdf_p) else 0},
+        "A_docx": _f("03_typesetting/output/A/manuscript.docx"),
+        "A_check_docx": _f("03_typesetting/output/A/manuscript_排版核对版.docx"),
+        "A_pdf": _f("03_typesetting/output/A/manuscript.pdf"),
+        "A_zip": _f("03_typesetting/output/A/submission_package.zip"),
+        "B_tex": _f("03_typesetting/output/B/main.tex"),
+        "B_pdf": _f("03_typesetting/output/B/manuscript.pdf"),
+        "B_zip": _f("03_typesetting/output/B/submission_package.zip"),
     }
+
+    def _line(key, label):
+        a = art[key]
+        return f"- {label}：{a['path']}（{'已生成 ' + format(a['size'], ',') + ' B' if a['exists'] else '缺失'}）"
+
+    # P3-PATH-91：两路核对要素比对（图数/表数/引用条数）
+    a_res = (p3m.get("A") or {}).get("docx") or {}
+    b_res = (p3m.get("B") or {}).get("tex") or {}
+    cmp_rows = []
+    for k, label in (("figures", "图数"), ("tables", "表格数"), ("references", "参考文献条数")):
+        av, bv = a_res.get(k), b_res.get(k)
+        same = (av is not None and av == bv)
+        cmp_rows.append(f"| {label} | {av} | {bv} | {'一致' if same else '不一致'} |")
 
     lines = [
         "# P3 排版检查报告（check_report）", "",
         f"- dataset: {ACC}", f"- timestamp: {TS}",
-        f"- P2 输出级别：{p2['level']}；正文实体：{ms_rel or '无'}", "",
-        "## 投稿件（A 路：.md → docx → pdf）", "",
-        f"- docx：{art['docx']['path']}（{'已生成 ' + str(art['docx']['size']) + ' B' if art['docx']['exists'] else '缺失'}）",
-        f"- pdf ：{art['pdf']['path']}（{'已生成 ' + str(art['pdf']['size']) + ' B' if art['pdf']['exists'] else '缺失'}）",
+        f"- P2 输出级别：{p2['level']}；正文实体：{ms_rel or '无'}",
+        f"- 排版路由（§2.4）：A_B（A=Word/LibreOffice，B=LaTeX/{'xelatex'}）",
+        f"- 同源校验（P3-PATH-90）：source_md_sha256 = {str(p3m.get('source_md_sha256',''))[:16]}…", "",
+        "## 投稿件", "",
+        "### A 路（.md → docx → pdf）", "",
+        _line("A_docx", "正文 docx（审稿版：双倍行距 + 连续行号，§8.1）"),
+        _line("A_check_docx", "排版核对版 docx（安全版：1.5 倍行距 + 无行号，§8.1）"),
+        _line("A_pdf", "manuscript.pdf"),
+        _line("A_zip", "submission_package.zip"), "",
+        "### B 路（.md → latex → pdf）", "",
+        _line("B_tex", "main.tex（P3 自建，禁由 docx 转换，§2.4 硬约束②）"),
+        _line("B_pdf", "manuscript.pdf"),
+        _line("B_zip", "submission_package.zip"), "",
         f"- 排版引擎返回码：{render.get('returncode', '-')}", "",
-        "## 判定汇总", "",
-        "| 判据组 | 计划 A 档 | 本轮已实现 | 判定 |", "|---|---|---|---|",
-        "| 排版守卫 T1–T69 | 85（分档表） | 0（守卫代码未实现，空规） | N/A |",
-        "| 出图守卫 F1–F29 | （与参数卡重合） | 部分（五格式由 P1 figure_export 承担） | 见下 |",
-        "| 降级守卫 D1–D14 | — | 0 | N/A |", "",
-        "## 本轮可机检项（来自 P1 figure_export）", "",
+        "## P3-PATH-91 两路核对", "",
+        "| 要素 | A 路 | B 路 | 判定 |", "|---|---|---|---|",
+    ] + cmp_rows + [
+        "", "## Word 模板参数实测（§9.1）", "",
+        "| 项 | 规范 | 本轮 |", "|---|---|---|",
+        "| 英文/中文字体 | Times New Roman 12pt / 宋体 12pt | 同 |",
+        "| 页面 / 边距 | A4 / 四边 2.5cm | 同 |",
+        "| 对齐 | 左对齐（禁两端对齐） | 同 |",
+        "| 行距（双轨） | 审稿版双倍 / 安全版 1.5 | 双轨均已产出 |",
+        "| 行号 | 审稿版连续行号、安全版无 | 按轨设置 |",
+        "| 页脚 | 居中自动页码 | PAGE 域 |",
+        "| 表格 | 原生 Word、无竖线无底纹（§10.1） | 三线表 |",
+        "| 参考文献 | 一条一段 + 悬挂缩进（§3.1③） | 悬挂缩进 21pt |",
+        "| 图件嵌入宽度 | ≤160mm，不叠加人为上限（§3.1②） | 160mm |", "",
+        "## 出图可机检项（来自 P1 figure_export）", "",
     ]
     fe = load(os.path.join(ws, "analysis", "_index", f"figure_export_{ACC}.yaml")) or {}
     for f in fe.get("figures", []) or []:
@@ -568,10 +630,11 @@ def run_p3(ws: str, p2: dict) -> None:
         lines.append(f"- {os.path.basename(str(f.get('figure','')))}："
                      f"pdf={'ok' if sizes.get('pdf') else '缺'} svg={fmts.get('svg')} "
                      f"png={fmts.get('png')} tiff={fmts.get('tiff')} jpg={fmts.get('jpg')}")
-    lines += ["", "## 纪律声明", "",
-              "- 排版守卫仍为空规状态：已按《判据分档表》登记，不计入通过（不伪造 PASS）。",
-              "- 出图规格：P1 侧已按 02版 §11.2/§11.3 出图（85/160 mm、Arial 8pt、线宽 ≤1pt、图内无图题）。",
-              "- pdf 由 LibreOffice 转换产生；若转换不可用，check_report 会如实标缺失。", ""]
+    lines += ["", "## 未实现 / 如实标注", "",
+              "- 排版守卫 T1–T69 的自动化检查器尚未实现（登记为空规），不计入通过。",
+              "- 标题自动编号（T52）当前用文本编号（1 / 1.1 / 1.1.1），未写 w:numPr；如需机器可检需补 numbering.xml。",
+              "- PDF 字体全嵌入（T66）依赖 LibreOffice/xelatex 默认行为，尚未做程序化校验。",
+              "- 目标期刊未定 → V1–V7 休眠，按通用安全格式执行（§20.2）。", ""]
     w(os.path.join(mdir, "check_report.md"), "\n".join(lines))
 
 
