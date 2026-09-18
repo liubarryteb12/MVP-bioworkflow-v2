@@ -74,40 +74,44 @@ if (mode == "series_matrix") {
   cat("matrix: ", nrow(expr_direct), " x ", ncol(expr_direct), "\n", sep = "")
 }
 
+# 统一出图风格（02版 P1 §11.2/§11.3）：85/160 mm、Arial 8pt、线宽 ≤1pt、
+# 色盲友好、图内无图题无图注无网格。所有图必须经 fig_open/fig_close 产出。
+.fs <- "analysis/modules/_shared/fig_style.R"
+if (!file.exists(.fs)) stop("缺少统一出图风格文件：", .fs)
+source(.fs)
+
 if (mode == "cel") {
 ab <- affy::ReadAffy(celfile.path = cel_dir)
 n_arrays <- ncol(exprs(ab))
 cat("n arrays: ", n_arrays, "  cdf: ", ab@cdfName, "\n", sep = "")
 
-pdf(get_out("qc_boxplot"), width = 7, height = 5)
-boxplot(ab, main = paste0("Raw PM intensity (n=", ncol(exprs(ab)), ")"), las = 2)
-dev.off()
+fig_open(get_out("qc_boxplot"), 85, 70)
+boxplot(ab, las = 2, col = fig_pal[["sky"]], border = fig_pal[["grey"]],
+        outline = FALSE, ylab = "Raw PM intensity (log2)")
+fig_close()
 
-pdf(get_out("qc_density"), width = 7, height = 5)
-hist(ab, main = "Raw intensity density", lwd = 1)
-dev.off()
+fig_open(get_out("qc_density"), 85, 70)
+hist(ab, lwd = FIG_LWD, col = fig_pal[["sky"]], border = "white",
+     xlab = "Raw intensity (log2)")
+fig_close()
 cat("step1 done: QC figures written\n")
 } else {
 expr <- expr_direct
-for (o in c(get_out("qc_boxplot"), get_out("qc_density"))) {
-  pdf(o, width = 7, height = 5)
-  par(mar = c(9, 4, 3, 1))
-  if (endsWith(o, "boxplot.pdf")) {
-    boxplot(expr, las = 2, col = "#4C72B0", main = paste0("Expression distribution (n=", ncol(expr), ")"),
-            ylab = "Expression (log2 scale)")
-  } else {
-    # 必须先 plot 第一条再 lines 后续，否则报 "plot.new has not been called yet"
-    sub_idx <- sample(seq_len(ncol(expr)), min(8, ncol(expr)))
-    dens_list <- apply(expr[, sub_idx, drop = FALSE], 2, function(v) density(v, na.rm = TRUE))
-    plot(dens_list[[1]], main = "Expression density (subset)",
-         xlab = "Expression (log2 scale)", lwd = 1)
-    if (length(dens_list) > 1) {
-      for (i in seq_along(dens_list)[-1]) lines(dens_list[[i]], lwd = 1)
-    }
-    legend("topright", bty = "n", colnames(expr)[sub_idx], lwd = 1, cex = 0.6)
-  }
-  dev.off()
+fig_open(get_out("qc_boxplot"), 85, 70)
+boxplot(expr, las = 2, col = fig_pal[["sky"]], border = fig_pal[["grey"]],
+        outline = FALSE, ylab = "Expression (log2)")
+fig_close()
+
+fig_open(get_out("qc_density"), 85, 70)
+# 必须先 plot 第一条再 lines 后续，否则报 "plot.new has not been called yet"
+sub_idx <- sample(seq_len(ncol(expr)), min(8, ncol(expr)))
+dens_list <- apply(expr[, sub_idx, drop = FALSE], 2, function(v) density(v, na.rm = TRUE))
+plot(dens_list[[1]], xlab = "Expression (log2)", ylab = "Density", lwd = FIG_LWD)
+if (length(dens_list) > 1) {
+  for (i in seq_along(dens_list)[-1]) lines(dens_list[[i]], lwd = FIG_LWD)
 }
+legend("topright", bty = "n", colnames(expr)[sub_idx], lwd = FIG_LWD, cex = 0.65)
+fig_close()
 cat("step1 done: QC figures written (series_matrix mode)\n")
 }
 

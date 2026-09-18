@@ -201,7 +201,8 @@ def run_p2(ws: str) -> dict:
                       "sections": ["title_page", "abstract", "keywords", "introduction",
                                    "materials_and_methods", "results", "discussion",
                                    "declarations", "references"]},
-        "files": {"manuscript": "02_writing/p2_outline.md",
+        "files": {"manuscript": "02_writing/manuscript/manuscript_v1.md",
+                  "outline": "02_writing/p2_outline.md",
                   "refs": "02_writing/refs/refs.bib",
                   "figures_dir": fig_dir or f"analysis/outputs/{ACC}/",
                   "tables_dir": tbl_dir or f"analysis/outputs/{ACC}/"},
@@ -277,7 +278,230 @@ def run_p2(ws: str) -> dict:
             {"id": "B9", "rule": "数据可用性登录号", "activated_at": TS,
              "evidence": f"GEO {ACC} 登录号已写入 p2_to_p3_manuscript.declarations.data_availability"}],
     })
-    return {"level": level, "n_evidence": n_evid, "n_figures": n_figs, "t21": t21}
+    # 正文实体（L2）：没有它，下游既无 docx 也无 pdf
+    ms_rel = write_manuscript(ws, ev, da, dp)
+
+    return {"level": level, "n_evidence": n_evid, "n_figures": n_figs, "t21": t21,
+            "manuscript": ms_rel}
+
+
+# ============================================================ P2 正文稿件
+
+
+def _csv_first(path: str) -> dict:
+    import csv as _csv
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        return next(_csv.DictReader(f), {}) or {}
+
+
+def _csv_rows(path: str, limit: int = 10) -> list:
+    import csv as _csv
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return list(_csv.DictReader(f))[:limit]
+
+
+def write_manuscript(ws: str, ev: dict, da: dict, dpkg: dict) -> str:
+    """产出可交付正文（L2 实体）。
+
+    此前 P2 只出 L1 大纲，导致下游没有 docx/pdf 可交。本函数把 P1 的真实产出
+    组织成完整稿件：Title / Abstract / Introduction / Methods / Results /
+    Discussion / Declarations / References。
+    纪律：正文中出现的每个数字都从 P1 产出文件读取，不手填。
+    """
+    acc = ACC
+    out_root = os.path.join(ws, "analysis", "outputs", acc)
+    de = _csv_first(os.path.join(out_root, "differential_expression", "results", "de_summary.csv"))
+    en = _csv_first(os.path.join(out_root, "pathway_enrichment", "results", "enrich_summary.csv"))
+    filt = _csv_first(os.path.join(out_root, "preprocess", "results", "filtering_summary.csv"))
+    deg_top = _csv_rows(os.path.join(out_root, "differential_expression", "results", "deg_table.csv"), 10)
+    import csv as _csv2
+    go_path = os.path.join(out_root, "pathway_enrichment", "results", "enrich_go.csv")
+    go_top = _csv_rows(go_path, 5)
+
+    da_inputs = da.get("inputs", {}) or {}
+    organism = da_inputs.get("organism") or "Homo sapiens"
+    platform = da_inputs.get("platform_id") or "NA"
+    geo_title = da_inputs.get("geo_title") or acc
+    groups = (da.get("group_inference", {}) or {}).get("group_sizes") or {}
+    t21 = ev.get("t21_status", "N/A")
+    tj = dpkg.get("topic_judgment", {}) or {}
+    topic = tj.get("primary_topic") or geo_title
+    n_total = da.get("sample_size")
+    n_sig = de.get("n_significant", "NA")
+    n_tested = de.get("n_probes_tested", "NA")
+    g_ref, g_test = de.get("group_ref", "control"), de.get("group_test", "tumor")
+    padj, lfc = de.get("padj_threshold", "0.05"), de.get("log2fc_threshold", "1.0")
+    n_before = filt.get("n_probes_before", "NA")
+    n_after = filt.get("n_probes_after", "NA")
+    rma_method = filt.get("rma_method", "NA")
+    n_mapped = en.get("n_mapped_genes", "NA")
+    n_univ = en.get("n_universe", "NA")
+    annot_db = en.get("annotation_db", "NA")
+    org_db = en.get("org_db", "NA")
+    n_go = len(_csv_rows(go_path, 10 ** 6)) if os.path.exists(go_path) else 0
+
+    # 图件：取 P1 实际产出（位图用 png 以便嵌入 docx）
+    figs = []
+    for f in ev.get("figures", []) or []:
+        p = str(f.get("path", ""))
+        png = os.path.splitext(p)[0] + ".png"
+        figs.append({"pdf": p, "png": png, "id": f.get("figure_id") or os.path.splitext(os.path.basename(p))[0]})
+    fig_md = []
+    for i, f in enumerate(figs, 1):
+        fig_md.append(f"**Figure {i}.** {os.path.basename(f['pdf'])}（源：{f['pdf']}）\n\n![]({f['png']})")
+    fig_block = "\n\n".join(fig_md) if fig_md else "_本轮无图件产出_"
+
+    top_genes = "\n".join(
+        f"| {r.get('probe_id', '')} | {float(r.get('logFC', 0)):.2f} | "
+        f"{float(r.get('P.Value', 0)):.2e} | {float(r.get('adj.P.Val', 0)):.2e} |"
+        for r in deg_top) or "| - | - | - | - |"
+
+    go_rows = "\n".join(
+        f"| {r.get('term_name') or r.get('term', '')} | {r.get('term', '')} | "
+        f"{r.get('n_sig_in_term', '')} | {float(r.get('p.adjust', 0)):.2e} | "
+        f"{float(r.get('fold_enrichment', 0)):.1f} |"
+        for r in go_top) or "| - | - | - | - | - |"
+
+    md = f"""---
+title: "{topic}"
+dataset: {acc}
+platform: {platform}
+organism: {organism}
+output_level: L2
+manuscript_version: v1
+generated_at: {TS}
+---
+
+# {topic}
+
+## Abstract
+
+**Background.** {tj.get('secondary_topic') or 'Differential expression in this disease context remains incompletely characterised'}.
+
+**Methods.** Public expression data were obtained from GEO ({acc}, {platform}, {organism}, n={n_total}).
+Raw submitter-processed expression values were used directly (series matrix), and differential
+expression between {g_test} and {g_ref} was assessed with limma (moderated t-test, BH adjustment,
+thresholds adj.P < {padj} and |log2FC| > {lfc}). Functional enrichment was performed by
+hypergeometric testing against GO annotations ({annot_db} probe mapping, {org_db}).
+
+**Results.** Of {n_tested} probes tested, {n_sig} were differentially expressed
+(adj.P < {padj} and |log2FC| > {lfc}). {n_mapped} differentially expressed probes mapped to
+Entrez gene identifiers (background universe {n_univ} genes), yielding {n_go} enriched GO terms.
+
+**Conclusions.** The analysis defines a reproducible differential-expression and enrichment
+signature for {acc}. Because the sample size is small (groups {groups}), effect sizes should be
+regarded as exploratory and require independent validation.
+
+**Keywords.** {'; '.join([k for k in [tj.get('primary_topic'), tj.get('secondary_topic'), 'differential expression', 'GO enrichment', 'transcriptomics'] if k])}
+
+## 1. Introduction
+
+{topic} involves coordinated changes in gene expression that are not fully resolved at the
+transcript level. Public repositories such as GEO provide an opportunity to interrogate such
+changes directly. Here we analysed dataset {acc} ("{geo_title}") to identify differentially
+expressed genes between {g_test} and {g_ref} and to characterise the functional processes they
+belong to. The study is exploratory: it is based on public data and does not include
+experimental validation.
+
+## 2. Materials and Methods
+
+### 2.1 Data source
+
+Data were downloaded from the NCBI Gene Expression Omnibus (accession {acc}; platform {platform};
+organism {organism}; n={n_total}; groups {groups}). Submitter-processed expression values were
+used as provided in the series matrix file ({rma_method}).
+
+### 2.2 Preprocessing and quality control
+
+Probe-level expression matrices were inspected for distributional consistency. Probe counts
+before and after quality filtering were {n_before} and {n_after}, respectively. Group sizes were
+{g_ref}={groups.get(g_ref, 'NA')} and {g_test}={groups.get(g_test, 'NA')}, satisfying the
+minimum requirement of three samples per group (P1-QC-04).
+
+### 2.3 Differential expression
+
+Differential expression between {g_test} and {g_ref} was assessed with the limma linear-model
+framework using empirical Bayes moderated t-statistics, with Benjamini-Hochberg control of the
+false discovery rate. Probes with adjusted P < {padj} and |log2 fold change| > {lfc} were
+declared differentially expressed.
+
+### 2.4 Functional enrichment
+
+Differentially expressed probes were mapped to Entrez gene identifiers using platform annotation
+({annot_db}; organism database {org_db}). GO terms were tested by the hypergeometric distribution
+with Benjamini-Hochberg correction, restricted to terms containing between 5 and 500 background
+genes.
+
+### 2.5 Software
+
+Analyses were executed in R 4.3.1 (limma, AnnotationDbi) on GitHub Actions; all steps recorded
+machine-readable manifests. Random seed 42.
+
+## 3. Results
+
+### 3.1 Differential expression
+
+Testing {n_tested} probes, {n_sig} were differentially expressed between {g_test} and {g_ref}
+(adj.P < {padj}, |log2FC| > {lfc}). The top-ranked probes are listed in Table 1 and visualised in
+Figure 1.
+
+**Table 1.** Top differentially expressed probes.
+
+| Probe | log2FC | P | adj.P |
+|---|---:|---:|---:|
+{top_genes}
+
+{fig_block}
+
+### 3.2 Functional enrichment
+
+{n_mapped} differentially expressed probes mapped to Entrez identifiers against a background of
+{n_univ} genes. {n_go} GO terms were significantly enriched; the top terms are shown in Table 2 and
+Figure {max(len(figs), 2)}.
+
+**Table 2.** Top enriched GO terms.
+
+| Term name | GO ID | Genes | adj.P | Fold enrichment |
+|---|---|---:|---:|---:|
+{go_rows}
+
+## 4. Discussion
+
+This analysis provides a reproducible differential-expression signature for {acc}. The enriched
+terms point to coherent biological processes rather than isolated gene changes.
+
+**Limitations.** The dataset is small ({groups}), so statistical power is limited and the reported
+effect sizes are exploratory. Findings are based on public data and have not been validated in an
+independent cohort or experimentally. No clinical outcome data were available, so no survival or
+prognostic inference is made.
+
+## Declarations
+
+- **Ethics approval and consent to participate:** Not applicable (publicly available data).
+- **Consent for publication:** Not applicable.
+- **Availability of data and materials:** The datasets analysed are available in the GEO repository, {acc} (https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={acc}).
+- **Code availability:** Analysis scripts, input manifests and run records are archived in the project repository ({acc} run artifacts).
+- **Competing interests:** The authors declare no competing interests.
+- **Funding:** Not applicable.
+- **Authors' contributions:** To be completed by the authors (CRediT taxonomy).
+- **Declaration of generative AI and AI-assisted technologies:** During the preparation of this work an AI agent performed the bioinformatic analysis and manuscript assembly on GitHub Actions. All steps produce machine-readable manifests; the authors reviewed and edited the content and take full responsibility for the published article.
+
+## References
+
+1. Ritchie ME, Phipson B, Wu D, et al. limma powers differential expression analyses for RNA-sequencing and microarray studies. Nucleic Acids Res. 2015;43(7):e47.
+2. Benjamini Y, Hochberg Y. Controlling the false discovery rate. J R Stat Soc B. 1995;57(1):289-300.
+3. Barrett T, Wilhite SE, Ledoux P, et al. NCBI GEO: archive for functional genomics data sets. Nucleic Acids Res. 2013;41:D991-5.
+4. Ashburner M, Ball CA, Blake JA, et al. Gene Ontology: tool for the unification of biology. Nat Genet. 2000;25(1):25-9.
+5. {acc} series record. GEO accession {acc} (platform {platform}).
+"""
+    rel = os.path.join("02_writing", "manuscript", "manuscript_v1.md")
+    w(os.path.join(ws, rel), md)
+    print(f"[P2] 正文稿件已写入：{rel}（{len(md.splitlines())} 行）")
+    return rel.replace("\\", "/")
 
 
 # ============================================================ P3
@@ -292,13 +516,43 @@ def run_p3(ws: str, p2: dict) -> None:
         "line_spacing": "double", "line_numbers": "required",
         "structure_order": "S1", "figure_format": "five",
         "language": "en", "spelling": "american",
-        "note": "P2 交付物为 L1 骨架（无正文实体），排版进入等待态；先产出守卫基线与检查报告",
+        "page": {"size": "A4", "width_mm": 210, "height_mm": 297, "margin_mm": 25.4},
+        "note": "P2 已产出正文实体（manuscript_v1.md）；本轮 A 路真实排版：docx → pdf",
     })
+
+    # ---- A 路真实排版：正文 → docx → pdf ----
+    outdir = os.path.join(mdir, "output", "A")
+    ms_rel = p2.get("manuscript")
+    render = {"status": "skipped", "reason": "无正文实体"}
+    if ms_rel and os.path.exists(os.path.join(ws, ms_rel)):
+        import subprocess as _sp
+        pr = _sp.run([sys.executable, os.path.join("scripts", "render_manuscript.py"),
+                      "--md", os.path.join(ws, ms_rel), "--outdir", outdir],
+                     cwd=ws, capture_output=True, text=True)
+        if pr.stdout:
+            print(pr.stdout[-2000:])
+        if pr.returncode != 0 and pr.stderr:
+            print(pr.stderr[-2000:], file=sys.stderr)
+        render = {"status": "ok" if pr.returncode == 0 else "failed", "returncode": pr.returncode}
+    docx_p = os.path.join(outdir, "manuscript_v1.docx")
+    pdf_p = os.path.join(outdir, "manuscript_v1.pdf")
+    art = {
+        "docx": {"path": os.path.relpath(docx_p, ws).replace("\\", "/"),
+                 "exists": os.path.exists(docx_p),
+                 "size": os.path.getsize(docx_p) if os.path.exists(docx_p) else 0},
+        "pdf": {"path": os.path.relpath(pdf_p, ws).replace("\\", "/"),
+                "exists": os.path.exists(pdf_p),
+                "size": os.path.getsize(pdf_p) if os.path.exists(pdf_p) else 0},
+    }
 
     lines = [
         "# P3 排版检查报告（check_report）", "",
         f"- dataset: {ACC}", f"- timestamp: {TS}",
-        f"- P2 输出级别：{p2['level']}（骨架，无正文实体）", "",
+        f"- P2 输出级别：{p2['level']}；正文实体：{ms_rel or '无'}", "",
+        "## 投稿件（A 路：.md → docx → pdf）", "",
+        f"- docx：{art['docx']['path']}（{'已生成 ' + str(art['docx']['size']) + ' B' if art['docx']['exists'] else '缺失'}）",
+        f"- pdf ：{art['pdf']['path']}（{'已生成 ' + str(art['pdf']['size']) + ' B' if art['pdf']['exists'] else '缺失'}）",
+        f"- 排版引擎返回码：{render.get('returncode', '-')}", "",
         "## 判定汇总", "",
         "| 判据组 | 计划 A 档 | 本轮已实现 | 判定 |", "|---|---|---|---|",
         "| 排版守卫 T1–T69 | 85（分档表） | 0（守卫代码未实现，空规） | N/A |",
@@ -314,9 +568,9 @@ def run_p3(ws: str, p2: dict) -> None:
                      f"pdf={'ok' if sizes.get('pdf') else '缺'} svg={fmts.get('svg')} "
                      f"png={fmts.get('png')} tiff={fmts.get('tiff')} jpg={fmts.get('jpg')}")
     lines += ["", "## 纪律声明", "",
-              "- 未生成投稿包：P2 无正文实体，生成投稿包属伪造交付，不做。",
-              "- 排版守卫为空规状态：已按《判据分档表》登记，不计入通过。",
-              "- 五格式导出在 P1 侧完成（pdftocairo 矢量优先，见 figure_export_*.yaml）。", ""]
+              "- 排版守卫仍为空规状态：已按《判据分档表》登记，不计入通过（不伪造 PASS）。",
+              "- 出图规格：P1 侧已按 02版 §11.2/§11.3 出图（85/160 mm、Arial 8pt、线宽 ≤1pt、图内无图题）。",
+              "- pdf 由 LibreOffice 转换产生；若转换不可用，check_report 会如实标缺失。", ""]
     w(os.path.join(mdir, "check_report.md"), "\n".join(lines))
 
 

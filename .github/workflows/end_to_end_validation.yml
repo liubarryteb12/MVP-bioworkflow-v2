@@ -82,7 +82,13 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev libpng-dev libjpeg-dev poppler-utils
+          # fonts-liberation：Arial 的度量兼容替代（Linux 无真 Arial）；
+          # fontconfig 的 fc-list 供 R 出图时探测可用字体，保证图内字体统一且可嵌入。
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev libpng-dev libjpeg-dev poppler-utils fontconfig fonts-liberation
+          # libreoffice-writer：把 P3 的 docx 转成 pdf（用户要的稿件交付物）
+          sudo apt-get install -y --no-install-recommends libreoffice-writer
+          fc-list : family | sort -u | head -20
+          which soffice || which libreoffice || echo "WARN: LibreOffice 不可用，pdf 将缺失"
 
       - name: Install CRAN base
         run: |

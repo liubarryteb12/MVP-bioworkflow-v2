@@ -83,15 +83,31 @@ write.csv(
 cat("step2 done: tested=", nrow(tt), " significant=", n_sig, "\n", sep = "")
 
 # ---------- Step 3: 火山图 ----------
-pdf(get_out("volcano"), width = 6, height = 5.2)
-plot(tt$logFC, -log10(pmax(tt$P.Value, 1e-300)),
-     pch = 16, cex = 0.4, col = ifelse(!is.na(tt$adj.P.Val) & tt$adj.P.Val < padj_thr & abs(tt$logFC) > lfc_thr, "#D55E00", "#999999"),
-     xlab = "log2 fold change", ylab = "-log10 P value",
-     main = paste0("Volcano: ", test, " vs ", ref, " (n=", tab[[test]], " vs ", tab[[ref]], ")"))
-abline(v = c(-lfc_thr, lfc_thr), lty = 2, col = "grey40")
-abline(h = -log10(padj_thr), lty = 2, col = "grey40")
-dev.off()
-cat("step3 done: volcano written\n")
+# 02版 P1 §11.2/§11.3：85 mm 单栏、Arial 8pt、线宽 ≤1pt、图内无图题；
+# 生信火山图必备要素（出图要求 §4.6）：阈值线、上调/下调数量、颜色图例。
+.fs <- "analysis/modules/_shared/fig_style.R"
+if (!file.exists(.fs)) stop("缺少统一出图风格文件：", .fs)
+source(.fs)
+
+sig_up <- !is.na(tt$adj.P.Val) & tt$adj.P.Val < padj_thr & tt$logFC > lfc_thr
+sig_dn <- !is.na(tt$adj.P.Val) & tt$adj.P.Val < padj_thr & tt$logFC < -lfc_thr
+.y <- -log10(pmax(tt$P.Value, 1e-300))
+
+fig_open(get_out("volcano"), 85, 70)
+plot(tt$logFC, .y, pch = 16, cex = 0.45, col = fig_pal[["grey"]],
+     xlab = "log2 fold change", ylab = "-log10 P")
+points(tt$logFC[sig_up], .y[sig_up], pch = 16, cex = 0.45, col = fig_pal[["vermillion"]])
+points(tt$logFC[sig_dn], .y[sig_dn], pch = 16, cex = 0.45, col = fig_pal[["blue"]])
+abline(v = c(-lfc_thr, lfc_thr), lty = 2, lwd = FIG_LWD, col = fig_pal[["grey"]])
+abline(h = -log10(padj_thr), lty = 2, lwd = FIG_LWD, col = fig_pal[["grey"]])
+legend("topleft", bty = "n", pch = 16, cex = 0.68,
+       col = c(fig_pal[["vermillion"]], fig_pal[["blue"]], fig_pal[["grey"]]),
+       legend = c(paste0("Up (n=", sum(sig_up), ")"),
+                  paste0("Down (n=", sum(sig_dn), ")"),
+                  "Not significant"))
+fig_close()
+cat("step3 done: volcano written (up=", sum(sig_up), " down=", sum(sig_dn),
+    " thr: padj<", padj_thr, " |log2FC|>", lfc_thr, ")\n", sep = "")
 
 cat("== differential_expression success ==\n")
 sink()

@@ -18,7 +18,9 @@ import shutil
 import subprocess
 
 MAX_BYTES = 10 * 1024 * 1024
-PNG_DPI = 600
+# 线条图（火山图/富集图/箱线图等）位图分辨率：照做版与 Wiley 均要求 1200 dpi
+# （Elsevier 线条图 1000、Springer 线条图 1200，取 1200 才能通吃四家）。
+PNG_DPI = 1200
 JPG_DPI = 300
 JPG_QUALITY = 95
 

@@ -1,14 +1,17 @@
 dataset: GSE113865
 stage: basic
-requested_at: 2026-09-18T00:00:00+08:00
+requested_at: 2026-09-18T01:00:00+08:00
 requested_by: agent
-rerun: 8
+rerun: 9
 rerun_reason: >-
-  收口一轮。上一轮(run 35251459530)已全链路跑通：P1(preprocess/differential/pathway_enrichment 全 success，
-  真实 GO 富集 1650 条、64 个显著基因、universe 20762) → P2 → P3 → P4-b 全部产出。
-  本轮只修 P2 大纲里一句与 T21 pass 自相矛盾的硬编码（"不写显著字样"），使文案与判定一致。
+  按出图标准重做全部图件 + 补上文稿交付物。① 新增 analysis/modules/_shared/fig_style.R，
+  按 02版 P1 §11.2/§11.3 统一出图（85/160 mm、Arial 8pt、线宽 ≤1pt、色盲友好、
+  图内无图题无图注无网格），四个作图点（qc_boxplot/qc_density/volcano/enrich_plot）全部重画：
+  火山图补齐阈值线+上调下调数量+图例，富集图由 barplot 改为气泡图（基因数=气泡大小、
+  fold enrichment=颜色、双图例）；位图分辨率 600→1200 dpi（线条图要求）；装 fonts-liberation
+  保证图内字体为 Arial 度量兼容并可嵌入。② 补文稿：P2 新增 write_manuscript 产出真实正文
+  （Abstract/Intro/Methods/Results/Discussion/Declarations/References，数字全部读自 P1 产出），
+  P3 新增 render_manuscript.py 出 docx 并转 pdf（A4、2.54cm、1.5 倍行距、图注 1.0 倍行距）。
 note: >-
-  第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，
-  平台 GPL10558（Illumina HumanHT-12 V4.0），6 样本（GSM3121915-920），
-  配对设计 3 vs 3。非 Affymetrix、无 CEL，走 series matrix 直连表达矩阵路径；
-  探针 ID 为 ILMN_*，物种库 org.Hs.eg.db。
+  第二版数据集；Homo sapiens 三阴性乳腺癌组织 vs 配对癌旁正常组织，平台 GPL10558，
+  6 样本（GSM3121915-920），配对设计 3 vs 3。

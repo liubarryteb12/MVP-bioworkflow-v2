@@ -44,9 +44,17 @@ write_empty <- function(msg) {
   write.csv(data.frame(message = msg), get_out("enrich_go"), row.names = FALSE)
   write.csv(data.frame(message = msg), get_out("enrich_kegg"), row.names = FALSE)
   write.csv(data.frame(n_input = 0L, note = msg), get_out("enrich_summary"), row.names = FALSE)
-  pdf(get_out("enrich_plot"), width = 7, height = 5)
-  plot.new(); text(0.5, 0.5, msg, cex = 0.9)
-  dev.off()
+  .fs <- "analysis/modules/_shared/fig_style.R"
+  if (file.exists(.fs)) {
+    source(.fs, local = FALSE)
+    fig_open(get_out("enrich_plot"), 85, 70)
+    plot.new(); text(0.5, 0.5, msg, cex = 0.8)
+    fig_close()
+  } else {
+    pdf(get_out("enrich_plot"), width = 85 / 25.4, height = 70 / 25.4)
+    plot.new(); text(0.5, 0.5, msg, cex = 0.8)
+    dev.off()
+  }
   cat("== pathway_enrichment success (empty: ", msg, ") ==\n", sep = "")
   sink(); quit(status = 0)
 }
@@ -300,21 +308,43 @@ write.csv(
   get_out("enrich_summary"), row.names = FALSE
 )
 
-# ---------- 图 ----------
-pdf(get_out("enrich_plot"), width = 7.5, height = 5.5)
+# ---------- 图：GO 富集气泡图 ----------
+# 02版 P1 §11.2/§11.3：160 mm 双栏（GO 条目名较长）、Arial 8pt、图内无图题；
+# 生信富集图必备要素（出图要求 §4.6）：富集项名称、基因数（气泡大小）、
+# −log10(P)（横轴）、fold enrichment（颜色）、图例。
+.fs <- "analysis/modules/_shared/fig_style.R"
+if (!file.exists(.fs)) stop("缺少统一出图风格文件：", .fs)
+source(.fs)
+
+fig_open(get_out("enrich_plot"), 160, 110)
 if (!is.null(go_res) && nrow(go_res) > 0) {
-  top <- head(go_res[order(go_res$pvalue), ], min(20, nrow(go_res)))
+  top <- head(go_res[order(go_res$p.adjust), ], min(15, nrow(go_res)))
+  top <- top[order(top$p.adjust, decreasing = TRUE), , drop = FALSE]   # 最显著排在最上
   lab <- if (!is.null(top$term_name) && any(!is.na(top$term_name))) top$term_name else top$term
-  lab <- substr(ifelse(is.na(lab), top$term, lab), 1, 45)
-  par(mar = c(9, 12, 3, 2))
-  bp <- barplot(-log10(top$p.adjust), names.arg = lab, horiz = TRUE, las = 1,
-                col = "#4C72B0", border = NA,
-                main = "GO enrichment (top 20 by p.adjust)",
-                xlab = "-log10 adjusted P")
+  lab <- substr(ifelse(is.na(lab), top$term, lab), 1, 48)
+  .x <- -log10(top$p.adjust)
+  .n <- top$n_sig_in_term
+  .fe <- top$fold_enrichment
+  .sizes <- 0.55 + 2.1 * (.n - min(.n)) / max(1, diff(range(.n)))
+  .cols <- grDevices::colorRampPalette(c(fig_pal[["sky"]], fig_pal[["vermillion"]]))(50)
+  .idx <- if (diff(range(.fe)) > 0)
+    round(1 + 49 * (.fe - min(.fe)) / diff(range(.fe))) else rep(25, length(.fe))
+  par(mar = c(4.0, 4.3, 1.8, 1.2))
+  plot(.x, seq_along(.x), pch = 16, cex = .sizes, col = .cols[.idx],
+       yaxt = "n", ylab = "", xlab = "-log10 adjusted P",
+       xlim = c(0, max(.x) * 1.08), ylim = c(0.4, length(.x) + 0.6))
+  axis(2, at = seq_along(.x), labels = lab, las = 1, cex.axis = 0.65)
+  legend("bottomright", bty = "n", cex = 0.6, pch = 16, col = fig_pal[["grey"]],
+         pt.cex = c(0.7, 1.4, 2.1),
+         legend = c(min(.n), as.integer(stats::median(.n)), max(.n)),
+         title = "Genes", title.cex = 0.65)
+  legend("topright", bty = "n", cex = 0.6, pch = 16,
+         col = .cols[c(1, 25, 50)], legend = c("low", "mid", "high"),
+         title = "Fold enrichment", title.cex = 0.65)
 } else {
-  plot.new(); text(0.5, 0.5, "No enriched GO terms")
+  plot.new(); text(0.5, 0.5, "No enriched GO terms", cex = 0.8)
 }
-dev.off()
+fig_close()
 
 cat("== pathway_enrichment success ==\n")
 sink()
